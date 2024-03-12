@@ -159,7 +159,7 @@ int main()
 
                 for (int i = 0; i < numberParticles; i++) {
                     particles.push_back(Particle(i, startX + interval * i, startY + interval * i, angle, speed));
-                    particleShapes.push_back(sf::CircleShape(4, 10));
+                    particleShapes.push_back(sf::CircleShape(1, 10));
                     particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
                     //particleShapes.at(i).setFillColor(sf::Color::Red);
                     particleCount++;
@@ -195,7 +195,7 @@ int main()
 
                 for (int i = 0; i < numberParticles; i++) {
                     particles.push_back(Particle(i, startX2, startY2, angleStart + (interval * i), speed2));
-                    particleShapes.push_back(sf::CircleShape(4, 10));
+                    particleShapes.push_back(sf::CircleShape(1, 10));
                     particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
                     //particleShapes.at(i).setFillColor(sf::Color::Red);
                     particleCount++;
@@ -237,7 +237,7 @@ int main()
 
                 for (int i = 0; i < numberParticles; i++) {
                     particles.push_back(Particle(i, startX3, startY3, angle3, speedStart + (interval * i)));
-                    particleShapes.push_back(sf::CircleShape(4, 10));
+                    particleShapes.push_back(sf::CircleShape(1, 10));
                     particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
                     //particleShapes.at(i).setFillColor(sf::Color::Red);
                     particleCount++;
