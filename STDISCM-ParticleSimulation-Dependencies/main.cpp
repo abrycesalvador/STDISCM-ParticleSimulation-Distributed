@@ -265,7 +265,7 @@ int main()
 		}
 
         // Clear the main window
-        mainWindow.clear(sf::Color::Black);    
+        mainWindow.clear(sf::Color{ 128, 128, 128, 255});
 
         if (particleShapes.size() > 0) {
             std::unique_lock lock(mtx);
