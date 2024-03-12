@@ -39,9 +39,6 @@
     <ClCompile Include="Particle.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Wall.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="imgui\imconfig.h">

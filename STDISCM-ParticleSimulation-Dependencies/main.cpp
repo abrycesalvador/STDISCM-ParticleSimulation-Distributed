@@ -18,16 +18,15 @@ std::condition_variable cv;
 bool readyToRender = false;
 bool readyToCompute = true;
 const int numThreads = std::thread::hardware_concurrency();
-//int numInitParticles = 100;
 int currentParticle = 0;
 
 
-void updateParticles(std::vector<Particle>& particles, std::vector<sf::CircleShape>& particleShapes, std::vector<Wall>& walls) {
+void updateParticles(std::vector<Particle>& particles, std::vector<sf::CircleShape>& particleShapes) {
     while (true){
         {
             std::unique_lock lk(mtx);
             cv.wait(lk, [&particles] { return readyToCompute && particles.size() > 0; });
-            particles.at(currentParticle).checkCollision(walls);
+            particles.at(currentParticle).checkCollision();
             particles.at(currentParticle).updateParticlePosition();
             particleShapes.at(currentParticle).setPosition(particles.at(currentParticle).getPosX(), particles.at(currentParticle).getPosY());
             currentParticle++;
@@ -68,38 +67,8 @@ int main()
 	std::vector<sf::CircleShape> particleShapes;
     int particleCount = 0;
 
-    std::vector<Wall> walls;
-    std::vector<sf::VertexArray> wallShapes;
-
-    // SAMPLE WALLS
-    /*sf::VertexArray wallLine(sf::Lines, 2);
-    wallLine[0].position = sf::Vector2f(300, 100);
-    wallLine[1].position = sf::Vector2f(300, 300);
-    wallLine[0].color = sf::Color::White;
-    wallLine[1].color = sf::Color::White;
-
-    walls.push_back(Wall(300, 100, 300, 300));
-    wallShapes.push_back(wallLine);
-
-    sf::VertexArray wallLine2(sf::Lines,2);
-    wallLine2[0].position = sf::Vector2f(650, 650);
-    wallLine2[1].position = sf::Vector2f(350, 650);
-    wallLine2[0].color = sf::Color::White;
-    wallLine2[1].color = sf::Color::White;
-
-
-    walls.push_back(Wall(650, 650, 350, 650));
-    wallShapes.push_back(wallLine2);
-
-	sf::VertexArray wallLine3(sf::Lines, 2);
-	wallLine3[0].position = sf::Vector2f(350, 150);
-	wallLine3[1].position = sf::Vector2f(550, 450);
-	wallLine3[0].color = sf::Color::White;
-	wallLine3[1].color = sf::Color::White;
-
-	walls.push_back(Wall(350, 150, 550, 450));
-	wallShapes.push_back(wallLine3);
-
+    
+    /*
     // SAMPLE PARTICLES
     for (int i = 0; i < numInitParticles; i++) {
 		//particles.push_back(Particle(i, 100, 100, i, 5));
@@ -113,7 +82,7 @@ int main()
 	std::vector<std::thread> threads;
 
 	for (int i = 0; i < numThreads; ++i) {
-		threads.emplace_back(updateParticles, std::ref(particles), std::ref(particleShapes), std::ref(walls));
+		threads.emplace_back(updateParticles, std::ref(particles), std::ref(particleShapes));
 	}
 
 
@@ -250,7 +219,6 @@ int main()
 			std::cout << interval;
 
 			for (int i = 0; i < numberParticles; i++) {
-                std::cout << "speedStart: " << speedStart << " | interval: " << interval << " | i: " << i << " | speed: " << speedStart + (interval * i) << std::endl;  
 				particles.push_back(Particle(i, startX3, startY3, angle3, speedStart + (interval * i)));
 				particleShapes.push_back(sf::CircleShape(4, 10));
 				particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
@@ -271,48 +239,9 @@ int main()
 
         ImGui::End();
 
-		ImGui::SetNextWindowPos(ImVec2(1000, 0));
-
-        ImGui::Begin("Input Wall", NULL, ImGuiWindowFlags_AlwaysAutoResize);        
-        ImGui::SeparatorText("Add Walls");
-
-        static int wallStartX = 0;
-        static int wallStartY = 0;
-        static int wallEndX = 0;
-        static int wallEndY = 0;
-
-        ImGui::InputInt("Start X", &wallStartX);
-        ImGui::InputInt("Start Y", &wallStartY);
-        ImGui::InputInt("End X", &wallEndX);
-        ImGui::InputInt("End Y", &wallEndY);
-
-        //imgui button input
-        if (ImGui::Button("Add Wall"))
-        {
-			std::cout << "Adding wall from " << wallStartX << ", " << wallStartY << " to " << wallEndX << ", " << wallEndY << std::endl;
-            walls.push_back(Wall(wallStartX, wallStartY, wallEndX, wallEndY));
-            sf::VertexArray wall(sf::Lines, 2);
-            wall[0].position = sf::Vector2f(wallStartX, wallStartY);
-            wall[1].position = sf::Vector2f(wallEndX, wallEndY);
-            wallShapes.push_back(wall);
-        }
-
-        if (ImGui::Button("Clear Walls"))
-        {
-            walls.clear();
-            wallShapes.clear();
-        }
-        ImGui::End();
-
-
-
         // Clear the main window
         mainWindow.clear(sf::Color::Black);    
 
-        for (auto& wall : wallShapes) {
-            mainWindow.draw(wall);
-        }
-    
         if (particleShapes.size() > 0) {
             std::unique_lock lock(mtx);
             cv.wait(lock, [] { return readyToRender; });
