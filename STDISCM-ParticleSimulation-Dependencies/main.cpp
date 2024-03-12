@@ -19,6 +19,19 @@ bool readyToRender = false;
 bool readyToCompute = true;
 const int numThreads = std::thread::hardware_concurrency();
 int currentParticle = 0;
+int mode = 0; // 0 - Dev; 1 - Explorer
+
+std::atomic<bool> quitKeyPressed(false);
+
+void keyboardInputListener() {
+    while (!quitKeyPressed) {
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q)) {
+            mode = (mode == 0) ? 1 : 0;
+            std::cout << "Mode switched to: " << mode << std::endl;
+            std::this_thread::sleep_for(std::chrono::milliseconds(200)); // Debounce time to avoid rapid mode switching
+        }
+    }
+}
 
 
 void updateParticles(std::vector<Particle>& particles, std::vector<sf::CircleShape>& particleShapes) {
@@ -85,6 +98,7 @@ int main()
 		threads.emplace_back(updateParticles, std::ref(particles), std::ref(particleShapes));
 	}
 
+    std::thread keyboardThread(keyboardInputListener);
 
     sf::Clock deltaClock;
 
@@ -106,138 +120,142 @@ int main()
 
         ImGui::SFML::Update(mainWindow, deltaClock.restart());
 
-		ImGui::SetNextWindowPos(ImVec2(0, 0));
+        if (mode == 0) {
+            ImGui::SetNextWindowPos(ImVec2(0, 0));
 
-        ImGui::Begin("Input Particle", NULL, ImGuiWindowFlags_AlwaysAutoResize);
-        ImGui::SeparatorText("Add Particles");
+            ImGui::Begin("Input Particle", NULL, ImGuiWindowFlags_AlwaysAutoResize);
+            ImGui::SeparatorText("Add Particles");
 
-        //imgui input numbers only
-        static int numberParticles = 0;
-        ImGui::InputInt("Num Particles", &numberParticles);
-        ImGui::Text("");
-        ImGui::Text("");
+            //imgui input numbers only
+            static int numberParticles = 0;
+            ImGui::InputInt("Num Particles", &numberParticles);
+            ImGui::Text("");
+            ImGui::Text("");
 
-        static int startX = 0;
-        static int startY = 0;
-        static int endX = 0;
-        static int endY = 0;
-        static float speed = 0;
-        static float angle = 0;
+            static int startX = 0;
+            static int startY = 0;
+            static int endX = 0;
+            static int endY = 0;
+            static float speed = 0;
+            static float angle = 0;
 
-        ImGui::InputInt("Start X1", &startX);
-        ImGui::InputInt("Start Y1", &startY);
-        ImGui::InputInt("End X1", &endX);
-		ImGui::InputInt("End Y1", &endY);
-        ImGui::SliderFloat("Speed 1", &speed, 0, 11);
-        ImGui::InputFloat("Angle 1", &angle);
-        
-        //imgui button input
-        if (ImGui::Button("Add Case 1"))
-        {
-			std::cout << "CASE1: Adding " << numberParticles << " particles at " << startX << ", " << startY << " with speed " << speed << " and angle " << angle << std::endl;
-            float distance = sqrt(pow(endX - startX, 2) + pow(endY - startY, 2));
-            float interval = 0;
-            if (numberParticles == 1) interval = 0;
-            else interval = distance / (numberParticles - 1);
-            
-            for(int i = 0; i < numberParticles; i++){
-				particles.push_back(Particle(i, startX + interval * i, startY + interval*i, angle, speed));
-				particleShapes.push_back(sf::CircleShape(4, 10));
-				particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
-				//particleShapes.at(i).setFillColor(sf::Color::Red);
-                particleCount++;
+            ImGui::InputInt("Start X1", &startX);
+            ImGui::InputInt("Start Y1", &startY);
+            ImGui::InputInt("End X1", &endX);
+            ImGui::InputInt("End Y1", &endY);
+            ImGui::SliderFloat("Speed 1", &speed, 0, 11);
+            ImGui::InputFloat("Angle 1", &angle);
+
+            //imgui button input
+            if (ImGui::Button("Add Case 1"))
+            {
+                std::cout << "CASE1: Adding " << numberParticles << " particles at " << startX << ", " << startY << " with speed " << speed << " and angle " << angle << std::endl;
+                float distance = sqrt(pow(endX - startX, 2) + pow(endY - startY, 2));
+                float interval = 0;
+                if (numberParticles == 1) interval = 0;
+                else interval = distance / (numberParticles - 1);
+
+                for (int i = 0; i < numberParticles; i++) {
+                    particles.push_back(Particle(i, startX + interval * i, startY + interval * i, angle, speed));
+                    particleShapes.push_back(sf::CircleShape(4, 10));
+                    particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
+                    //particleShapes.at(i).setFillColor(sf::Color::Red);
+                    particleCount++;
+                }
+
+                cv.notify_all();
+
             }
 
-            cv.notify_all();
+            ImGui::Text("");
+            ImGui::Text("");
 
-        }
+            static int startX2 = 0;
+            static int startY2 = 0;
+            static float speed2 = 0;
+            static float angleStart = 0;
+            static float angleEnd = 0;
 
-        ImGui::Text("");
-        ImGui::Text("");
+            ImGui::InputInt("Start X2", &startX2);
+            ImGui::InputInt("Start Y2", &startY2);
+            ImGui::SliderFloat("Speed 2", &speed2, 0, 11);
+            ImGui::InputFloat("Angle Start", &angleStart);
+            ImGui::InputFloat("Angle End", &angleEnd);
 
-        static int startX2 = 0;
-        static int startY2 = 0;
-        static float speed2 = 0;
-        static float angleStart = 0;
-        static float angleEnd = 0;
+            //imgui button input
+            if (ImGui::Button("Add Case 2"))
+            {
+                std::cout << "CASE2: Adding " << numberParticles << " particles at " << startX2 << ", " << startY2 << " with speed " << speed2 << " and angle " << angleStart << " to " << angleEnd << std::endl;
+                float interval = 0;
+                if (numberParticles > 1) interval = (angleEnd - angleStart) / (numberParticles);
 
-        ImGui::InputInt("Start X2", &startX2);
-        ImGui::InputInt("Start Y2", &startY2);
-        ImGui::SliderFloat("Speed 2", &speed2, 0, 11);
-        ImGui::InputFloat("Angle Start", &angleStart);
-        ImGui::InputFloat("Angle End", &angleEnd);
+                std::cout << interval;
 
-        //imgui button input
-        if (ImGui::Button("Add Case 2"))
-        {
-            std::cout << "CASE2: Adding " << numberParticles << " particles at " << startX2 << ", " << startY2 << " with speed " << speed2 << " and angle " << angleStart << " to " << angleEnd << std::endl;
-            float interval = 0;
-            if (numberParticles >1) interval = (angleEnd - angleStart) / (numberParticles);
-                
-            std::cout << interval;
+                for (int i = 0; i < numberParticles; i++) {
+                    particles.push_back(Particle(i, startX2, startY2, angleStart + (interval * i), speed2));
+                    particleShapes.push_back(sf::CircleShape(4, 10));
+                    particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
+                    //particleShapes.at(i).setFillColor(sf::Color::Red);
+                    particleCount++;
+                }
 
-			for (int i = 0; i < numberParticles; i++) {
-				particles.push_back(Particle(i, startX2, startY2, angleStart+(interval*i), speed2));
-				particleShapes.push_back(sf::CircleShape(4, 10));
-				particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
-				//particleShapes.at(i).setFillColor(sf::Color::Red);
-				particleCount++;
-			}
+                cv.notify_all();
 
-            cv.notify_all();
-        
-        }
-
-        ImGui::Text("");
-        ImGui::Text("");
-
-        static int startX3 = 0;
-        static int startY3 = 0;
-        static float angle3 = 0;
-        static float speedStart = 0;
-        static float speedEnd = 0;
-
-        ImGui::InputInt("Start X3", &startX3);
-        ImGui::InputInt("Start Y3", &startY3);
-        ImGui::InputFloat("Angle 3", &angle3);
-        ImGui::SliderFloat("Speed Start", &speedStart, 0, 12);
-        ImGui::SliderFloat("Speed End", &speedEnd, 0, 12);
-        
-        
-
-        //imgui button input
-        if (ImGui::Button("Add Case 3"))
-        {
-			std::cout << "CASE3: Adding " << numberParticles << " particles at " << startX3 << ", " << startY3 << " with angle " << angle3 << " and speed " << speedStart << " to " << speedEnd << std::endl;
-		    
-			float interval = 0;
-            if (numberParticles > 1) {
-                interval = (speedEnd - speedStart) / (numberParticles - 1);
             }
-                
 
-			std::cout << interval;
+            ImGui::Text("");
+            ImGui::Text("");
 
-			for (int i = 0; i < numberParticles; i++) {
-				particles.push_back(Particle(i, startX3, startY3, angle3, speedStart + (interval * i)));
-				particleShapes.push_back(sf::CircleShape(4, 10));
-				particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
-				//particleShapes.at(i).setFillColor(sf::Color::Red);
-				particleCount++;
-			}
+            static int startX3 = 0;
+            static int startY3 = 0;
+            static float angle3 = 0;
+            static float speedStart = 0;
+            static float speedEnd = 0;
 
-            cv.notify_all();
+            ImGui::InputInt("Start X3", &startX3);
+            ImGui::InputInt("Start Y3", &startY3);
+            ImGui::InputFloat("Angle 3", &angle3);
+            ImGui::SliderFloat("Speed Start", &speedStart, 0, 12);
+            ImGui::SliderFloat("Speed End", &speedEnd, 0, 12);
+
+
+
+            //imgui button input
+            if (ImGui::Button("Add Case 3"))
+            {
+                std::cout << "CASE3: Adding " << numberParticles << " particles at " << startX3 << ", " << startY3 << " with angle " << angle3 << " and speed " << speedStart << " to " << speedEnd << std::endl;
+
+                float interval = 0;
+                if (numberParticles > 1) {
+                    interval = (speedEnd - speedStart) / (numberParticles - 1);
+                }
+
+
+                std::cout << interval;
+
+                for (int i = 0; i < numberParticles; i++) {
+                    particles.push_back(Particle(i, startX3, startY3, angle3, speedStart + (interval * i)));
+                    particleShapes.push_back(sf::CircleShape(4, 10));
+                    particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
+                    //particleShapes.at(i).setFillColor(sf::Color::Red);
+                    particleCount++;
+                }
+
+                cv.notify_all();
+            }
+
+            if (ImGui::Button("Clear Balls"))
+            {
+                particleCount = 0;
+                particles.clear();
+                particleShapes.clear();
+                //clear array of balls
+            }
+
+            ImGui::End();
         }
 
-        if (ImGui::Button("Clear Balls"))
-        {
-            particleCount = 0;
-            particles.clear();
-            particleShapes.clear();
-            //clear array of balls
-        }
-
-        ImGui::End();
+		
 
         // Clear the main window
         mainWindow.clear(sf::Color::Black);    
