@@ -121,6 +121,8 @@ int main()
         ImGui::SFML::Update(mainWindow, deltaClock.restart());
 
         if (mode == 0) {
+            mainWindow.setView(mainWindow.getDefaultView());
+
             ImGui::SetNextWindowPos(ImVec2(0, 0));
 
             ImGui::Begin("Input Particle", NULL, ImGuiWindowFlags_AlwaysAutoResize);
@@ -255,7 +257,12 @@ int main()
             ImGui::End();
         }
 
-		
+        if (mode == 1) {
+            
+            sf::View view(sf::FloatRect(640, 360, 19, 33));
+            mainWindow.setView(view);
+
+		}
 
         // Clear the main window
         mainWindow.clear(sf::Color::Black);    
