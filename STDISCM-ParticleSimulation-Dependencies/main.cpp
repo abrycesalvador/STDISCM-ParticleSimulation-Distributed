@@ -256,11 +256,34 @@ int main()
 
             ImGui::End();
         }
+        
+        sf::Sprite sprite;
+        sf::Texture texture;
+        if (!texture.loadFromFile("red.png")) {
+            // handle error
+            return -1;
+        }
 
         if (mode == 1) {
             
             sf::View view(sf::FloatRect(640, 360, 19, 33));
             mainWindow.setView(view);
+
+            sprite.setTexture(texture);
+            sprite.setTextureRect(sf::IntRect(0, 0, 1, 1));
+            sprite.setOrigin(sprite.getLocalBounds().width / 2, sprite.getLocalBounds().height / 2);
+            sprite.setPosition(view.getCenter());
+
+            //code for scaling - if using other images and not a color
+            /*float desiredWidth = 1;
+            float desiredHeight = 1;
+
+            sf::FloatRect spriteBounds = sprite.getLocalBounds();
+            float scaleX = desiredWidth / spriteBounds.width;
+            float scaleY = desiredHeight / spriteBounds.height;
+
+            sprite.setScale(scaleX, scaleY);*/
+
 
 		}
 
@@ -292,6 +315,10 @@ int main()
 
         ImGui::SFML::Render(mainWindow);
 
+        if (mode == 1)
+        {
+            mainWindow.draw(sprite);
+        }
         // Display the contents of the main window
         mainWindow.display();
     }
