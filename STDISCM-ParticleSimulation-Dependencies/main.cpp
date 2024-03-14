@@ -21,15 +21,44 @@ const int numThreads = std::thread::hardware_concurrency();
 int currentParticle = 0;
 int mode = 0; // 0 - Dev; 1 - Explorer
 
+sf::View explorerView(sf::FloatRect(640 - 9.5, 360 - 16.5, 19, 33));
+
 std::atomic<bool> quitKeyPressed(false);
+void moveExplorer(float moveX, float moveY);
 
 void keyboardInputListener() {
     while (!quitKeyPressed) {
+        float moveX = 5, moveY = 2.5;   // Change values for how distance explorer moves.
+
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q)) {
             mode = (mode == 0) ? 1 : 0;
             std::cout << "Mode switched to: " << mode << std::endl;
+
+            /*if (mode) {
+                std::cout << "Last logged explorer X: " << explorerView.getCenter().x << std::endl;
+                std::cout << "Last logged explorer Y: " << explorerView.getCenter().y << std::endl << std::endl;
+            }//*/
+
             std::this_thread::sleep_for(std::chrono::milliseconds(200)); // Debounce time to avoid rapid mode switching
+
         }
+        if (mode && (sf::Keyboard::isKeyPressed(sf::Keyboard::W) || sf::Keyboard::isKeyPressed(sf::Keyboard::Up))) {
+            moveExplorer(0, -moveY);
+            std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Debounce time to avoid rapid movement
+        }
+        if (mode && (sf::Keyboard::isKeyPressed(sf::Keyboard::A) || sf::Keyboard::isKeyPressed(sf::Keyboard::Left))) {
+            moveExplorer(-moveX, 0);
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        if (mode && (sf::Keyboard::isKeyPressed(sf::Keyboard::S) || sf::Keyboard::isKeyPressed(sf::Keyboard::Down))) {
+            moveExplorer(0, moveY);
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        if (mode && (sf::Keyboard::isKeyPressed(sf::Keyboard::D) || sf::Keyboard::isKeyPressed(sf::Keyboard::Right))) {
+            moveExplorer(moveX, 0);
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+
     }
 }
 
@@ -50,6 +79,13 @@ void updateParticles(std::vector<Particle>& particles, std::vector<sf::CircleSha
             }
         }      
     }    
+}
+
+
+void moveExplorer(float moveX, float moveY) {
+    sf::Vector2f currentCenter = explorerView.getCenter();
+    sf::Vector2f newCenter = currentCenter + sf::Vector2f(moveX, moveY);
+    explorerView.setCenter(newCenter);
 }
 
 int main()
@@ -265,14 +301,12 @@ int main()
         }
 
         if (mode == 1) {
-            
-            sf::View view(sf::FloatRect(640, 360, 19, 33));
-            mainWindow.setView(view);
+            mainWindow.setView(explorerView);
 
             sprite.setTexture(texture);
             sprite.setTextureRect(sf::IntRect(0, 0, 1, 1));
             sprite.setOrigin(sprite.getLocalBounds().width / 2, sprite.getLocalBounds().height / 2);
-            sprite.setPosition(view.getCenter());
+            sprite.setPosition(explorerView.getCenter());
 
             //code for scaling - if using other images and not a color
             /*float desiredWidth = 1;
