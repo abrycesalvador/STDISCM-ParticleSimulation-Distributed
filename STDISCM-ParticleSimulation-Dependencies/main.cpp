@@ -84,6 +84,16 @@ void updateParticles(std::vector<Particle>& particles, std::vector<sf::CircleSha
 
 void moveExplorer(float moveX, float moveY) {
     sf::Vector2f currentCenter = explorerView.getCenter();
+
+    if (currentCenter.x + moveX >= 1280)
+        moveX = 1280 - currentCenter.x;
+    else if (currentCenter.x + moveX < 0)
+        moveX = -currentCenter.x;
+
+    if (currentCenter.y + moveY >= 720)
+        moveY = 720 - currentCenter.y;
+    else if (currentCenter.y + moveY < 0)
+        moveY = -currentCenter.y;
     sf::Vector2f newCenter = currentCenter + sf::Vector2f(moveX, moveY);
     explorerView.setCenter(newCenter);
 }
