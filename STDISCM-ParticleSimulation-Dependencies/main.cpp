@@ -34,10 +34,10 @@ void keyboardInputListener() {
             mode = (mode == 0) ? 1 : 0;
             std::cout << "Mode switched to: " << mode << std::endl;
 
-            /*if (mode) {
+            if (mode) {
                 std::cout << "Last logged explorer X: " << explorerView.getCenter().x << std::endl;
                 std::cout << "Last logged explorer Y: " << explorerView.getCenter().y << std::endl << std::endl;
-            }//*/
+            }//
 
             std::this_thread::sleep_for(std::chrono::milliseconds(200)); // Debounce time to avoid rapid mode switching
 
@@ -332,7 +332,11 @@ int main()
 		}
 
         // Clear the main window
-        mainWindow.clear(sf::Color{ 128, 128, 128, 255});
+        mainWindow.clear(sf::Color{ 0, 0, 0, 255 });
+
+        sf::RectangleShape explorerArea(sf::Vector2f(1280, 720));
+        explorerArea.setFillColor(sf::Color{ 128, 128, 128, 255 });
+        mainWindow.draw(explorerArea);
 
         if (particleShapes.size() > 0) {
             std::unique_lock lock(mtx);
