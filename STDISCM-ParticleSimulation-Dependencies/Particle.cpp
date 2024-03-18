@@ -1,7 +1,6 @@
 #include <vector>
 #include <iostream>
 #include <SFML/Graphics.hpp>
-#include "Wall.cpp"
 #include "cmath"
 
 #define PI 3.14159265358979323846
