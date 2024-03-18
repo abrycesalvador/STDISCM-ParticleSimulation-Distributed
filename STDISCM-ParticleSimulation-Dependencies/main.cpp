@@ -117,9 +117,7 @@ int main()
 
     sf::Text fpsText;
     fpsText.setFont(font);
-    fpsText.setCharacterSize(30);
     fpsText.setFillColor(sf::Color::Green);
-    fpsText.setPosition(1150, 680);
     fpsText.setStyle(sf::Text::Bold | sf::Text::Underlined);
 
 	std::vector<Particle> particles;
@@ -317,7 +315,7 @@ int main()
             sprite.setTextureRect(sf::IntRect(0, 0, 1, 1));
             sprite.setOrigin(sprite.getLocalBounds().width / 2, sprite.getLocalBounds().height / 2);
             sprite.setPosition(explorerView.getCenter());
-
+            
             //code for scaling - if using other images and not a color
             /*float desiredWidth = 1;
             float desiredHeight = 1;
@@ -357,7 +355,18 @@ int main()
         {
             // Update last draw time
             lastFPSDrawTime = currentFPSTime;
-            fpsText.setString(std::to_string(fps.getFPS()) + " FPS");
+
+            if (mode == 1) {
+                fpsText.setString(std::to_string(fps.getFPS()));
+                fpsText.setPosition(explorerView.getCenter().x + explorerView.getSize().x / 2 - fpsText.getLocalBounds().width, 
+                                    explorerView.getCenter().y + explorerView.getSize().y / 2 - fpsText.getLocalBounds().height);
+                fpsText.setCharacterSize(10);
+			}
+            else {
+                fpsText.setString(std::to_string(fps.getFPS()) + " FPS");
+                fpsText.setPosition(1150, 680);
+                fpsText.setCharacterSize(30);
+			}
         }
         mainWindow.draw(fpsText);
 
