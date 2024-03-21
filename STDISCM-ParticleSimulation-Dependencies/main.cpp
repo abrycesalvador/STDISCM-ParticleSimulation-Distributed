@@ -21,7 +21,7 @@ const int numThreads = std::thread::hardware_concurrency();
 int currentParticle = 0;
 int mode = 0; // 0 - Dev; 1 - Explorer
 
-sf::View explorerView(sf::FloatRect(640 - 9.5, 360 - 16.5, 19, 33));
+sf::View explorerView(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 19));
 
 std::atomic<bool> quitKeyPressed(false);
 void moveExplorer(float moveX, float moveY);
@@ -309,7 +309,7 @@ int main()
         }
 
         sprite.setTexture(texture);
-        sprite.setTextureRect(sf::IntRect(0, 0, 8, 8));
+        sprite.setTextureRect(sf::IntRect(0, 0, 3, 3));
         sprite.setOrigin(sprite.getLocalBounds().width / 2, sprite.getLocalBounds().height / 2);
         sprite.setPosition(explorerView.getCenter());
 
