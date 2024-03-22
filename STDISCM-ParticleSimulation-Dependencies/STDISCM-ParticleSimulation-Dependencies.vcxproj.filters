@@ -36,7 +36,7 @@
     <ClCompile Include="imgui\imgui-SFML.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Particle.cpp">
+    <ClCompile Include="Particle.h">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
