@@ -7,7 +7,7 @@
 #include <mutex>
 
 
-#include "Particle.cpp"
+#include "Particle.h"
 #include "FPS.cpp"
 
 #include "imgui/imgui.h"
@@ -312,10 +312,19 @@ int main()
         sprite.setTextureRect(sf::IntRect(0, 0, 3, 3));
         sprite.setOrigin(sprite.getLocalBounds().width / 2, sprite.getLocalBounds().height / 2);
         sprite.setPosition(explorerView.getCenter());
+       
 
         if (mode == 1) {
             mainWindow.setView(explorerView);
 
+            fpsText.setString(std::to_string(fps.getFPS()));
+            fpsText.setCharacterSize(10);
+
+            sf::Vector2f fpsPosition = mainWindow.mapPixelToCoords(sf::Vector2i(10, 10));
+            fpsText.setPosition(fpsPosition);
+
+
+            mainWindow.draw(fpsText);
             //code for scaling - if using other images and not a color
             /*float desiredWidth = 1;
             float desiredHeight = 1;
@@ -356,13 +365,7 @@ int main()
             // Update last draw time
             lastFPSDrawTime = currentFPSTime;
 
-            if (mode == 1) {
-                fpsText.setString(std::to_string(fps.getFPS()));
-                fpsText.setPosition(explorerView.getCenter().x + explorerView.getSize().x / 2 - fpsText.getLocalBounds().width, 
-                                    explorerView.getCenter().y + explorerView.getSize().y / 2 - fpsText.getLocalBounds().height);
-                fpsText.setCharacterSize(10);
-			}
-            else {
+            if (mode == 0) {
                 fpsText.setString(std::to_string(fps.getFPS()) + " FPS");
                 fpsText.setPosition(1150, 680);
                 fpsText.setCharacterSize(30);
