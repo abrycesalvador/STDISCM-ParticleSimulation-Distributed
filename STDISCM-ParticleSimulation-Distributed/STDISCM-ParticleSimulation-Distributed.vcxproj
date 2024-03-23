@@ -24,7 +24,7 @@
     <ProjectGuid>{165959b9-d1bf-4908-9406-e407a44168ca}</ProjectGuid>
     <RootNamespace>STDISCMParticleSimulation</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>STDISCM-ParticleSimulation-Dependencies</ProjectName>
+    <ProjectName>STDISCM-ParticleSimulation-Distributed</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
