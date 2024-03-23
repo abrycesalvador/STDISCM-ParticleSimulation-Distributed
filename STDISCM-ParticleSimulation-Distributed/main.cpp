@@ -5,6 +5,7 @@
 #include <chrono>
 #include <thread>
 #include <mutex>
+#include <winsock2.h>
 
 
 #include "Particle.h"
@@ -12,6 +13,8 @@
 
 #include "imgui/imgui.h"
 #include "imgui/imgui-SFML.h"
+
+#pragma comment(lib, "ws2_32.lib")
 
 std::mutex mtx;
 std::condition_variable cv;
@@ -98,8 +101,44 @@ void moveExplorer(float moveX, float moveY) {
     explorerView.setCenter(newCenter);
 }
 
-int main()
-{
+int main(){
+
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        std::cerr << "Error initializing Winsock" << std::endl;
+        return -1;
+    }
+
+    // Create a socket for the server
+    SOCKET listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (listenSocket == INVALID_SOCKET) {
+        std::cerr << "Error at socket(): " << WSAGetLastError() << std::endl;
+        WSACleanup();
+        return 1;
+    }
+
+    // Bind the socket
+    sockaddr_in server_socket;
+    server_socket.sin_family = AF_INET;
+    server_socket.sin_addr.s_addr = INADDR_ANY;
+    server_socket.sin_port = htons(5000); 
+    if (bind(listenSocket, (SOCKADDR*)&server_socket, sizeof(server_socket)) == SOCKET_ERROR) {
+        std::cerr << "bind() failed: " << WSAGetLastError() << std::endl;
+        closesocket(listenSocket);
+        WSACleanup();
+        return 1;
+    }
+
+    // Listen on the socket
+    if (listen(listenSocket, SOMAXCONN) == SOCKET_ERROR) {
+        std::cerr << "listen() failed: " << WSAGetLastError() << std::endl;
+        closesocket(listenSocket);
+        WSACleanup();
+        return 1;
+    }
+
+    std::cout << "Server is listening..." << std::endl;
+
     // Create the main window
     sf::RenderWindow mainWindow(sf::VideoMode(1280, 720), "Particle Simulator");
     mainWindow.setFramerateLimit(60);
