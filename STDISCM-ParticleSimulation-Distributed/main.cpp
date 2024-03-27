@@ -6,6 +6,7 @@
 #include <thread>
 #include <mutex>
 #include <winsock2.h>
+#include <ws2tcpip.h>
 
 
 #include "Particle.h"
@@ -15,6 +16,8 @@
 #include "imgui/imgui-SFML.h"
 
 #pragma comment(lib, "ws2_32.lib")
+
+#define SERVER_IP "127.0.0.1"
 
 std::mutex mtx;
 std::condition_variable cv;
@@ -106,38 +109,51 @@ int main(){
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         std::cerr << "Error initializing Winsock" << std::endl;
-        return -1;
+        return 1;
     }
 
-    // Create a socket for the server
-    SOCKET listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (listenSocket == INVALID_SOCKET) {
-        std::cerr << "Error at socket(): " << WSAGetLastError() << std::endl;
+    SOCKET server_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (server_socket == INVALID_SOCKET) {
+        std::cerr << "Error creating socket" << std::endl;
         WSACleanup();
         return 1;
     }
 
-    // Bind the socket
-    sockaddr_in server_socket;
-    server_socket.sin_family = AF_INET;
-    server_socket.sin_addr.s_addr = INADDR_ANY;
-    server_socket.sin_port = htons(5000); 
-    if (bind(listenSocket, (SOCKADDR*)&server_socket, sizeof(server_socket)) == SOCKET_ERROR) {
-        std::cerr << "bind() failed: " << WSAGetLastError() << std::endl;
-        closesocket(listenSocket);
+    sockaddr_in server_address;
+    server_address.sin_family = AF_INET;
+    server_address.sin_port = htons(5001); // Port number on which the server will listen
+    inet_pton(AF_INET, SERVER_IP, &server_address.sin_addr);
+
+    // Bind the socket to the specified IP address and port
+    if (bind(server_socket, reinterpret_cast<SOCKADDR*>(&server_address), sizeof(server_address)) == SOCKET_ERROR) {
+        std::cerr << "Error binding socket" << std::endl;
+        closesocket(server_socket);
         WSACleanup();
         return 1;
     }
 
-    // Listen on the socket
-    if (listen(listenSocket, SOMAXCONN) == SOCKET_ERROR) {
-        std::cerr << "listen() failed: " << WSAGetLastError() << std::endl;
-        closesocket(listenSocket);
+    // Listen for incoming connections
+    if (listen(server_socket, SOMAXCONN) == SOCKET_ERROR) {
+        std::cerr << "Error listening on socket" << std::endl;
+        closesocket(server_socket);
         WSACleanup();
         return 1;
     }
 
     std::cout << "Server is listening..." << std::endl;
+
+    SOCKET client_socket;
+    sockaddr_in client_address;
+    int client_address_size = sizeof(client_address);
+    client_socket = accept(server_socket, reinterpret_cast<SOCKADDR*>(&client_address), &client_address_size);
+    if (client_socket == INVALID_SOCKET) {
+        std::cerr << "Error accepting connection" << std::endl;
+        closesocket(server_socket);
+        WSACleanup();
+        return 1;
+    }
+
+    std::cout << "Client connected" << std::endl;
 
     // Create the main window
     sf::RenderWindow mainWindow(sf::VideoMode(1280, 720), "Particle Simulator");
@@ -425,6 +441,10 @@ int main(){
 	}
 
     ImGui::SFML::Shutdown();
+
+    closesocket(client_socket); 
+    closesocket(server_socket);
+    WSACleanup();
 
     return 0;
 }

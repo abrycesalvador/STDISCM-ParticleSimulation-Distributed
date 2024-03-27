@@ -5,6 +5,8 @@
 #include <chrono>
 #include <thread>
 #include <mutex>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
 
 #include "Particle.h"
@@ -12,6 +14,10 @@
 
 #include "imgui/imgui.h"
 #include "imgui/imgui-SFML.h"
+
+#pragma comment(lib, "ws2_32.lib")
+
+#define SERVER_IP "127.0.0.1"
 
 std::mutex mtx;
 std::condition_variable cv;
@@ -100,8 +106,35 @@ void moveExplorer(float moveX, float moveY) {
 
 int main()
 {
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        std::cerr << "Error initializing Winsock" << std::endl;
+        return 1;
+    }
+
+    SOCKET client_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (client_socket == INVALID_SOCKET) {
+        std::cerr << "Error creating socket" << std::endl;
+        WSACleanup();
+        return 1;
+    }
+
+    sockaddr_in server_address;
+    server_address.sin_family = AF_INET;
+    server_address.sin_port = htons(5001); // Port number of the server
+    inet_pton(AF_INET, SERVER_IP, &server_address.sin_addr);
+
+    if (connect(client_socket, reinterpret_cast<SOCKADDR*>(&server_address), sizeof(server_address)) == SOCKET_ERROR) {
+        std::cerr << "Error connecting to server" << std::endl;
+        closesocket(client_socket);
+        WSACleanup();
+        return 1;
+    }
+
+    std::cout << "Connected to server" << std::endl;
+
     // Create the main window
-    sf::RenderWindow mainWindow(sf::VideoMode(1280, 720), "Particle Simulator");
+    sf::RenderWindow mainWindow(sf::VideoMode(1280, 720), "Particle Simulator Client");
     mainWindow.setFramerateLimit(60);
     ImGui::SFML::Init(mainWindow);
 
@@ -386,6 +419,9 @@ int main()
 	}
 
     ImGui::SFML::Shutdown();
+
+    closesocket(client_socket);
+    WSACleanup();
 
     return 0;
 }
