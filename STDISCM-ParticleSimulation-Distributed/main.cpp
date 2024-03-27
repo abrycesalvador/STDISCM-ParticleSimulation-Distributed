@@ -7,6 +7,8 @@
 #include <mutex>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <sstream>
+#include <string>
 
 
 #include "Particle.h"
@@ -36,6 +38,10 @@ void receivePosition(SOCKET client_socket) {
     const int bufferSize = 1024;
     char buffer[bufferSize];
     int bytesReceived;
+    float x_float;
+    float y_float;
+    std::string x;
+    std::string y;
 
     while (true) {
         bytesReceived = recv(client_socket, buffer, bufferSize - 1, 0);
@@ -43,7 +49,19 @@ void receivePosition(SOCKET client_socket) {
             buffer[bytesReceived] = '\0'; 
 
             std::string receivedData(buffer);
-            std::cout << "Received from client: " << buffer << std::endl;
+            std::cout << "Received string from client: " << receivedData << std::endl;
+
+            receivedData = receivedData.substr(1, receivedData.size() - 2);
+            std::cout << "Received from client: " << receivedData << std::endl;
+            std::istringstream iss(receivedData);
+            std::getline(iss, x, ',');
+            std::getline(iss, y);
+
+            x_float = std::stof(x);
+            y_float = std::stof(y);
+
+            explorerView.setCenter(x_float, y_float);
+
         }
         else if (bytesReceived == 0) {
             std::cout << "Connection closed by the client." << std::endl;
@@ -55,7 +73,7 @@ void receivePosition(SOCKET client_socket) {
         }
 
         //receive this thread every X seconds
-        std::this_thread::sleep_for(std::chrono::seconds(3));
+        std::this_thread::sleep_for(std::chrono::seconds(1));
     } 
     
 }
