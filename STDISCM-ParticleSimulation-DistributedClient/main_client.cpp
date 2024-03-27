@@ -32,6 +32,28 @@ sf::View explorerView(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 19));
 std::atomic<bool> quitKeyPressed(false);
 void moveExplorer(float moveX, float moveY);
 
+void sendLocation(SOCKET client_socket, sf::View& explorer) {
+    while (true) {
+
+        sf::Vector2 position = explorer.getCenter();
+
+        std::string sendString = "(" + std::to_string(position.x) + ", " + std::to_string(position.y) + ")";
+
+        int bytes_sent = send(client_socket, sendString.c_str(), sendString.size(), 0);
+        
+        if (bytes_sent == SOCKET_ERROR) {
+            std::cerr << "Error sending data to server" << std::endl;
+            closesocket(client_socket);
+            WSACleanup();
+            break;
+        }
+
+        // send this thread every X seconds
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+    }
+}
+
+
 void keyboardInputListener() {
     while (!quitKeyPressed) {
         float moveX = 5, moveY = 2.5;   // Change values for how distance explorer moves.
@@ -177,6 +199,8 @@ int main()
 
     std::thread keyboardThread(keyboardInputListener);
 
+    std::thread sendLocationThread(sendLocation, client_socket, std::ref(explorerView));
+
     sf::Clock deltaClock;
 
     // Main loop
@@ -197,7 +221,6 @@ int main()
 
         ImGui::SFML::Update(mainWindow, deltaClock.restart());
 
-        
         sf::Sprite sprite;
         sf::Texture texture;
         if (!texture.loadFromFile("red.png")) {
@@ -209,9 +232,7 @@ int main()
         sprite.setTextureRect(sf::IntRect(0, 0, 3, 3));
         sprite.setOrigin(sprite.getLocalBounds().width / 2, sprite.getLocalBounds().height / 2);
         sprite.setPosition(explorerView.getCenter());
-       
 
-        
         mainWindow.setView(explorerView);
 
         fpsText.setString(std::to_string(fps.getFPS()));

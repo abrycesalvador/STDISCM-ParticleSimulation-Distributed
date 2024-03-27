@@ -32,6 +32,34 @@ sf::View explorerView(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 19));
 std::atomic<bool> quitKeyPressed(false);
 void moveExplorer(float moveX, float moveY);
 
+void receivePosition(SOCKET client_socket) {
+    const int bufferSize = 1024;
+    char buffer[bufferSize];
+    int bytesReceived;
+
+    while (true) {
+        bytesReceived = recv(client_socket, buffer, bufferSize - 1, 0);
+        if (bytesReceived > 0) {
+            buffer[bytesReceived] = '\0'; 
+
+            std::string receivedData(buffer);
+            std::cout << "Received from client: " << buffer << std::endl;
+        }
+        else if (bytesReceived == 0) {
+            std::cout << "Connection closed by the client." << std::endl;
+            break; 
+        }
+        else {
+            std::cerr << "Receive failed with error code: " << WSAGetLastError() << std::endl;
+            break; 
+        }
+
+        //receive this thread every X seconds
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+    } 
+    
+}
+
 //void keyboardInputListener() {
 //    while (!quitKeyPressed) {
 //        float moveX = 5, moveY = 2.5;   // Change values for how distance explorer moves.
@@ -200,6 +228,8 @@ int main(){
     //std::thread keyboardThread(keyboardInputListener);
 
     sf::Clock deltaClock;
+
+    std::thread receivePositionThread(receivePosition, client_socket);
 
     // Main loop
     while (mainWindow.isOpen())
