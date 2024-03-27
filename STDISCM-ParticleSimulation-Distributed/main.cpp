@@ -414,6 +414,13 @@ int main(){
         sprite.setOrigin(sprite.getLocalBounds().width / 2, sprite.getLocalBounds().height / 2);
         sprite.setPosition(explorerView.getCenter());
 
+        sf::RectangleShape rectShape(sf::Vector2f(33, 19));
+        rectShape.setFillColor(sf::Color::Transparent); 
+        rectShape.setOutlineColor(sf::Color::White);    
+        rectShape.setOutlineThickness(1);               
+
+        sf::Vector2f spritePos = sprite.getPosition();
+        rectShape.setPosition(spritePos.x - 16.5f, spritePos.y - 9.5f);
 
         // Clear the main window
         mainWindow.clear(sf::Color{ 0, 0, 0, 255 });
@@ -453,6 +460,7 @@ int main(){
         ImGui::SFML::Render(mainWindow);
 
         mainWindow.draw(sprite);
+        mainWindow.draw(rectShape);
         
         // Display the contents of the main window
         mainWindow.display();
