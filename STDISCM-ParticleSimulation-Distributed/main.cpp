@@ -28,6 +28,11 @@ bool readyToCompute = true;
 const int numThreads = std::thread::hardware_concurrency();
 int currentParticle = 0;
 
+std::vector<std::thread> clientThreads;
+std::mutex clientCountMutex;
+int clientCount = 0;
+const int MAX_CLIENTS = 3;
+
 sf::View explorerView(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 19));
 
 sf::View explorerViews[3] = { sf::View(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 19)),   //client 1
@@ -99,9 +104,48 @@ void receivePosition(SOCKET client_socket) {
         //receive this thread every X seconds
         std::this_thread::sleep_for(std::chrono::seconds(1));
     } 
+
+    closesocket(client_socket);
+    
+    {
+        std::lock_guard<std::mutex> lock(clientCountMutex);
+        clientCount--;
+    }
     
 }
 
+void acceptClients(SOCKET server_socket) {
+    while (true) {
+        {
+            std::lock_guard<std::mutex> lock(clientCountMutex);
+            if (clientCount >= MAX_CLIENTS) {
+                std::cerr << "Maximum number of clients reached. Rejecting new connections." << std::endl;
+                break;
+            }
+        }
+
+
+        SOCKET client_socket;
+        sockaddr_in client_address;
+        int client_address_size = sizeof(client_address);
+        client_socket = accept(server_socket, reinterpret_cast<SOCKADDR*>(&client_address), &client_address_size);
+        if (client_socket == INVALID_SOCKET) {
+            std::cerr << "Error accepting connection" << std::endl;
+            closesocket(server_socket);
+            WSACleanup();
+            continue;
+        }
+
+        // Start a new thread to handle communication with the client
+        clientThreads.emplace_back(receivePosition, client_socket);
+
+        {
+            std::lock_guard<std::mutex> lock(clientCountMutex);
+            clientCount++;
+        }
+    }
+
+}
 //void keyboardInputListener() {
 //    while (!quitKeyPressed) {
 //        float moveX = 5, moveY = 2.5;   // Change values for how distance explorer moves.
@@ -212,7 +256,7 @@ int main(){
 
     std::cout << "Server is listening..." << std::endl;
 
-    SOCKET client_socket;
+    /*SOCKET client_socket;
     sockaddr_in client_address;
     int client_address_size = sizeof(client_address);
     client_socket = accept(server_socket, reinterpret_cast<SOCKADDR*>(&client_address), &client_address_size);
@@ -223,7 +267,9 @@ int main(){
         return 1;
     }
 
-    std::cout << "Client connected" << std::endl;
+    std::cout << "Client connected" << std::endl;*/
+    
+    std::thread acceptClientsThread(acceptClients, server_socket);
 
     // Create the main window
     sf::RenderWindow mainWindow(sf::VideoMode(1280, 720), "Particle Simulator");
@@ -271,7 +317,7 @@ int main(){
 
     sf::Clock deltaClock;
 
-    std::thread receivePositionThread(receivePosition, client_socket);
+    //std::thread receivePositionThread(receivePosition, client_socket);
 
     // Load textures
     if (!textures[0].loadFromFile("red.png")) {
@@ -516,7 +562,6 @@ int main(){
 
     ImGui::SFML::Shutdown();
 
-    closesocket(client_socket); 
     closesocket(server_socket);
     WSACleanup();
 

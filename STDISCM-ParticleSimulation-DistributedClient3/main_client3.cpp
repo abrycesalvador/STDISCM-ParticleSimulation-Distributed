@@ -37,7 +37,7 @@ void sendLocation(SOCKET client_socket, sf::View& explorer) {
 
         sf::Vector2 position = explorer.getCenter();
 
-        std::string sendString = "(" + std::to_string(position.x) + ", " + std::to_string(position.y) + ")";
+        std::string sendString = "(2, " + std::to_string(position.x) + ", " + std::to_string(position.y) + ")";
 
         int bytes_sent = send(client_socket, sendString.c_str(), sendString.size(), 0);
         

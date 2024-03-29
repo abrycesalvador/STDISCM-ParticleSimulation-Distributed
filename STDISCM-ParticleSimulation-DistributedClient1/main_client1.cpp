@@ -156,7 +156,7 @@ int main()
     std::cout << "Connected to server" << std::endl;
 
     // Create the main window
-    sf::RenderWindow mainWindow(sf::VideoMode(1280, 720), "Particle Simulator Client");
+    sf::RenderWindow mainWindow(sf::VideoMode(1280, 720), "Particle Simulator Client 1");
     mainWindow.setFramerateLimit(60);
     ImGui::SFML::Init(mainWindow);
 
