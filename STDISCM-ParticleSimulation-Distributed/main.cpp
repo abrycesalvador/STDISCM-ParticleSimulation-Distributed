@@ -30,6 +30,15 @@ int currentParticle = 0;
 
 sf::View explorerView(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 19));
 
+sf::View explorerViews[3] = { sf::View(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 19)),   //client 1
+                             sf::View(sf::FloatRect(100 - 9.5, 200 - 16.5, 33, 19)),   //client 2
+                             sf::View(sf::FloatRect(800 - 9.5, 600 - 16.5, 33, 19)) }; //client 3
+
+bool activeClients[3] = { false, false, false };
+
+sf::Sprite sprites[3];
+sf::Texture textures[3];
+
 std::atomic<bool> quitKeyPressed(false);
 void moveExplorer(float moveX, float moveY);
 
@@ -252,6 +261,21 @@ int main(){
 
     std::thread receivePositionThread(receivePosition, client_socket);
 
+    // Load textures
+    if (!textures[0].loadFromFile("red.png")) {
+        // handle error
+        return -1;
+    }
+    if (!textures[1].loadFromFile("green.png")) {
+        // handle error
+        return -1;
+    }
+    if (!textures[2].loadFromFile("blue.png")) {
+        // handle error
+        return -1;
+    }
+    
+
     // Main loop
     while (mainWindow.isOpen())
     {
@@ -404,7 +428,7 @@ int main(){
         }
 
         ImGui::End();
-        
+
         sf::Sprite sprite;
         sf::Texture texture;
         if (!texture.loadFromFile("red.png")) {
