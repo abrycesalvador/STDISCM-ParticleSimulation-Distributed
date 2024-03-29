@@ -29,6 +29,15 @@ int mode = 1; // 0 - Dev; 1 - Explorer
 
 sf::View explorerView(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 19));
 
+bool activeClients[3] = { true, false, false };
+clock_t activeClientsTime[3] = { 0, 0, 0 };
+const clock_t TIMEOUT = 2 * CLOCKS_PER_SEC; // 2 seconds
+
+sf::Sprite sprites[3];
+sf::Texture textures[3];
+
+float spritePositions[3][2] = { {0, 0}, {0, 0}, {0, 0} };
+
 std::atomic<bool> quitKeyPressed(false);
 void moveExplorer(float moveX, float moveY);
 
@@ -55,6 +64,55 @@ void sendLocation(SOCKET client_socket, sf::View& explorer) {
     }
 }
 
+void receiveFromServer(SOCKET client_socket) {
+    const int bufferSize = 1024;
+    char buffer[bufferSize];
+    int bytesReceived;
+
+    while (true) {
+        bytesReceived = recv(client_socket, buffer, bufferSize - 1, 0);
+        if (bytesReceived == SOCKET_ERROR) {
+			std::cerr << "Error in receiving data from server" << std::endl;
+			closesocket(client_socket);
+			WSACleanup();
+			break;
+		}
+
+        if (bytesReceived == 0) {
+			std::cout << "Server disconnected" << std::endl;
+			closesocket(client_socket);
+			WSACleanup();
+			break;
+		}
+
+		buffer[bytesReceived] = '\0';
+		std::string receivedString(buffer);
+
+		std::cout << "Received: " << receivedString << std::endl;
+
+		
+		
+
+	}
+}
+
+void clearClients() {
+    int i = 0;
+
+    while (true) {
+
+        if (activeClients[i] && clock() - activeClientsTime[i] > TIMEOUT) {
+            activeClients[i] = false;
+        }
+
+        if (i == 2) {
+            i = 0;
+        }
+        else {
+            i++;
+        }
+    }
+}
 
 void keyboardInputListener() {
     while (!quitKeyPressed) {
@@ -202,8 +260,25 @@ int main()
     std::thread keyboardThread(keyboardInputListener);
 
     std::thread sendLocationThread(sendLocation, client_socket, std::ref(explorerView));
+    std::thread receiveFromServerThread(receiveFromServer, client_socket);
+    std::thread clearClientsThread(clearClients);
 
     sf::Clock deltaClock;
+
+    // Load textures
+    if (!textures[0].loadFromFile("red.png")) {
+        // handle error
+        return -1;
+    }
+    if (!textures[1].loadFromFile("green.png")) {
+        // handle error
+        return -1;
+    }
+    if (!textures[2].loadFromFile("blue.png")) {
+        // handle error
+        return -1;
+    }
+
 
     // Main loop
     while (mainWindow.isOpen())
@@ -223,17 +298,30 @@ int main()
 
         ImGui::SFML::Update(mainWindow, deltaClock.restart());
 
-        sf::Sprite sprite;
-        sf::Texture texture;
-        if (!texture.loadFromFile("red.png")) {
-            // handle error
-            return -1;
+        //sf::Sprite sprite;
+        //sf::Texture texture;
+        //if (!texture.loadFromFile("red.png")) {
+        //    // handle error
+        //    return -1;
+        //}
+
+        //sprite.setTexture(texture);
+        //sprite.setTextureRect(sf::IntRect(0, 0, 3, 3));
+        //sprite.setOrigin(sprite.getLocalBounds().width / 2, sprite.getLocalBounds().height / 2);
+        //sprite.setPosition(explorerView.getCenter());
+
+        for (int i = 0; i < 3; ++i) {
+            if (activeClients[i]) {
+                sprites[i].setTexture(textures[i]);
+                sprites[i].setTextureRect(sf::IntRect(0, 0, 3, 3));
+                sprites[i].setOrigin(sprites[i].getLocalBounds().width / 2, sprites[i].getLocalBounds().height / 2);
+                
+                if (i == 0) {
+					sprites[i].setPosition(explorerView.getCenter());
+				}
+            }
         }
 
-        sprite.setTexture(texture);
-        sprite.setTextureRect(sf::IntRect(0, 0, 3, 3));
-        sprite.setOrigin(sprite.getLocalBounds().width / 2, sprite.getLocalBounds().height / 2);
-        sprite.setPosition(explorerView.getCenter());
 
         mainWindow.setView(explorerView);
 
@@ -290,7 +378,11 @@ int main()
 
         ImGui::SFML::Render(mainWindow);
 
-        mainWindow.draw(sprite);
+        for (int i = 0; i < 3; ++i) {
+            if (activeClients[i]) {
+                mainWindow.draw(sprites[i]);
+            }
+        }
         
         // Display the contents of the main window
         mainWindow.display();

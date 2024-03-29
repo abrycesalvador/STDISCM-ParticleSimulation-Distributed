@@ -124,6 +124,30 @@ void receivePosition(SOCKET client_socket) {
     
 }
 
+void sendData(SOCKET client_socket) {
+    while (true) {
+
+        std::string message = "{0"; // 0 means server is sending sprite positions to client
+
+        for (int i = 0; i < 3; i++) {
+            if (activeClients[i]) {
+				message += " | {" + std::to_string(i) + "," + std::to_string(explorerViews[i].getCenter().x) + "," + std::to_string(explorerViews[i].getCenter().y) + "}";
+			}
+		}
+
+		message += "}";
+
+		int bytesSent = send(client_socket, message.c_str(), message.size(), 0);
+        if (bytesSent == SOCKET_ERROR) {
+			std::cerr << "Send failed with error code: " << WSAGetLastError() << std::endl;
+			closesocket(client_socket);
+			break;
+		}
+
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+	}
+}
+
 void acceptClients(SOCKET server_socket) {
     while (true) {
         {
@@ -148,7 +172,9 @@ void acceptClients(SOCKET server_socket) {
 
         // Start a new thread to handle communication with the client
         std::thread(receivePosition, client_socket).detach();
+        std::thread(sendData, client_socket).detach();
 
+      
         {
             std::lock_guard<std::mutex> lock(clientCountMutex);
             clientCount++;
