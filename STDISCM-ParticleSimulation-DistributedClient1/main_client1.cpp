@@ -40,6 +40,8 @@ void sendLocation(SOCKET client_socket, sf::View& explorer) {
         std::string sendString = "(0, " + std::to_string(position.x) + ", " + std::to_string(position.y) + ")";
 
         int bytes_sent = send(client_socket, sendString.c_str(), sendString.size(), 0);
+
+        std::cout << "Sent: " << bytes_sent << std::endl;
         
         if (bytes_sent == SOCKET_ERROR) {
             std::cerr << "Error sending data to server" << std::endl;

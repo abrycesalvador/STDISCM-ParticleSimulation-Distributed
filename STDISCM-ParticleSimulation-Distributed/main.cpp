@@ -40,6 +40,8 @@ sf::View explorerViews[3] = { sf::View(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 
                              sf::View(sf::FloatRect(800 - 9.5, 600 - 16.5, 33, 19)) }; //client 3
 
 bool activeClients[3] = { false, false, false };
+clock_t activeClientsTime[3] = { 0, 0, 0 };
+const clock_t TIMEOUT = 2 * CLOCKS_PER_SEC; // 2 seconds
 
 sf::Sprite sprites[3];
 sf::Texture textures[3];
@@ -85,11 +87,12 @@ void receivePosition(SOCKET client_socket) {
 				activeClients[1] = true;
 				explorerViews[1].setCenter(x_float, y_float);
 			}
-			else if (client_num == 2) {
-				activeClients[2] = true;
-				explorerViews[2].setCenter(x_float, y_float);
-			}
-            
+            else if (client_num == 2) {
+                activeClients[2] = true;
+                explorerViews[2].setCenter(x_float, y_float);
+            }
+
+            activeClientsTime[client_num] = clock();
 
         }
         else if (bytesReceived == 0) {
@@ -98,6 +101,13 @@ void receivePosition(SOCKET client_socket) {
         }
         else {
             std::cerr << "Receive failed with error code: " << WSAGetLastError() << std::endl;
+            closesocket(client_socket);
+
+            {
+                std::lock_guard<std::mutex> lock(clientCountMutex);
+                clientCount--;
+            }
+
             break; 
         }
 
@@ -137,7 +147,7 @@ void acceptClients(SOCKET server_socket) {
         }
 
         // Start a new thread to handle communication with the client
-        clientThreads.emplace_back(receivePosition, client_socket);
+        std::thread(receivePosition, client_socket).detach();
 
         {
             std::lock_guard<std::mutex> lock(clientCountMutex);
@@ -145,6 +155,24 @@ void acceptClients(SOCKET server_socket) {
         }
     }
 
+}
+
+void clearClients() {
+    int i = 0;
+
+    while(true) {
+        
+        if (activeClients[i] && clock() - activeClientsTime[i] > TIMEOUT) {
+            activeClients[i] = false;
+        }
+
+        if (i == 2) {
+			i = 0;
+		}
+        else {
+			i++;
+		}
+    }
 }
 //void keyboardInputListener() {
 //    while (!quitKeyPressed) {
@@ -270,6 +298,7 @@ int main(){
     std::cout << "Client connected" << std::endl;*/
     
     std::thread acceptClientsThread(acceptClients, server_socket);
+    std::thread clearClientsThread(clearClients);
 
     // Create the main window
     sf::RenderWindow mainWindow(sf::VideoMode(1280, 720), "Particle Simulator");
