@@ -72,7 +72,19 @@ void receivePosition(SOCKET client_socket) {
             x_float = std::stof(x);
             y_float = std::stof(y);
 
-            //explorerView.setCenter(x_float, y_float);
+            if (client_num == 0) {
+                activeClients[0] = true;
+                explorerViews[0].setCenter(x_float, y_float);
+            }
+            else if (client_num == 1) {
+				activeClients[1] = true;
+				explorerViews[1].setCenter(x_float, y_float);
+			}
+			else if (client_num == 2) {
+				activeClients[2] = true;
+				explorerViews[2].setCenter(x_float, y_float);
+			}
+            
 
         }
         else if (bytesReceived == 0) {
