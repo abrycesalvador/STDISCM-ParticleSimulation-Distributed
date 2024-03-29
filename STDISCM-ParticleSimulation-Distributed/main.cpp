@@ -441,25 +441,24 @@ int main(){
 
         ImGui::End();
 
-        sf::Sprite sprite;
-        sf::Texture texture;
-        if (!texture.loadFromFile("red.png")) {
-            // handle error
-            return -1;
+        for (int i = 0; i < 3; ++i) {
+            if (activeClients[i]) {
+                sprites[i].setTexture(textures[i]);
+                sprites[i].setTextureRect(sf::IntRect(0, 0, 3, 3));
+                sprites[i].setOrigin(sprites[i].getLocalBounds().width / 2, sprites[i].getLocalBounds().height / 2);
+                sprites[i].setPosition(explorerViews[i].getCenter());
+			}
         }
 
-        sprite.setTexture(texture);
-        sprite.setTextureRect(sf::IntRect(0, 0, 3, 3));
-        sprite.setOrigin(sprite.getLocalBounds().width / 2, sprite.getLocalBounds().height / 2);
-        sprite.setPosition(explorerView.getCenter());
-
-        sf::RectangleShape rectShape(sf::Vector2f(33, 19));
-        rectShape.setFillColor(sf::Color::Transparent); 
-        rectShape.setOutlineColor(sf::Color::White);    
-        rectShape.setOutlineThickness(1);               
-
-        sf::Vector2f spritePos = sprite.getPosition();
-        rectShape.setPosition(spritePos.x - 16.5f, spritePos.y - 9.5f);
+        sf::RectangleShape rectShapes[3];
+        for (int i = 0; i < 3; ++i) {
+            if (activeClients[i]) {
+                rectShapes[i].setSize(sf::Vector2f(33, 19));
+                rectShapes[i].setFillColor(sf::Color::Transparent);
+                rectShapes[i].setOutlineColor(sf::Color::White);
+                rectShapes[i].setOutlineThickness(1);
+            }
+        }
 
         // Clear the main window
         mainWindow.clear(sf::Color{ 0, 0, 0, 255 });
@@ -497,10 +496,16 @@ int main(){
         mainWindow.draw(fpsText);
 
         ImGui::SFML::Render(mainWindow);
-
-        mainWindow.draw(sprite);
-        mainWindow.draw(rectShape);
         
+        for (int i = 0; i < 3; ++i) {
+            if (activeClients[i]) {
+                sf::Vector2f spritePos = sprites[i].getPosition();
+                rectShapes[i].setPosition(spritePos.x - 16.5f, spritePos.y - 9.5f);
+                mainWindow.draw(sprites[i]);
+                mainWindow.draw(rectShapes[i]);
+            }
+        }
+
         // Display the contents of the main window
         mainWindow.display();
     }
