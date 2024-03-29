@@ -29,14 +29,12 @@ int mode = 1; // 0 - Dev; 1 - Explorer
 
 sf::View explorerView(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 19));
 
-bool activeClients[3] = { true, false, false };
-clock_t activeClientsTime[3] = { 0, 0, 0 };
-const clock_t TIMEOUT = 2 * CLOCKS_PER_SEC; // 2 seconds
+bool activeClients[3] = { true, false, false};
 
 sf::Sprite sprites[3];
 sf::Texture textures[3];
 
-float spritePositions[3][2] = { {0, 0}, {0, 0}, {0, 0} };
+float spritePositions[3][2];
 
 std::atomic<bool> quitKeyPressed(false);
 void moveExplorer(float moveX, float moveY);
@@ -49,9 +47,7 @@ void sendLocation(SOCKET client_socket, sf::View& explorer) {
         std::string sendString = "(0, " + std::to_string(position.x) + ", " + std::to_string(position.y) + ")";
 
         int bytes_sent = send(client_socket, sendString.c_str(), sendString.size(), 0);
-
         std::cout << "Sent: " << bytes_sent << std::endl;
-        
         if (bytes_sent == SOCKET_ERROR) {
             std::cerr << "Error sending data to server" << std::endl;
             closesocket(client_socket);
@@ -64,54 +60,34 @@ void sendLocation(SOCKET client_socket, sf::View& explorer) {
     }
 }
 
-void receiveFromServer(SOCKET client_socket) {
+void receiveSpritePositions(SOCKET client_socket) {
     const int bufferSize = 1024;
     char buffer[bufferSize];
     int bytesReceived;
 
     while (true) {
-        bytesReceived = recv(client_socket, buffer, bufferSize - 1, 0);
-        if (bytesReceived == SOCKET_ERROR) {
-			std::cerr << "Error in receiving data from server" << std::endl;
-			closesocket(client_socket);
-			WSACleanup();
-			break;
+        char buffer[sizeof(float) * 3 * 2];
+        recv(client_socket, buffer, sizeof(buffer), 0);
+
+        // Deserialize the data
+        memcpy(spritePositions, buffer, sizeof(float) * 3 * 2);
+
+        //print spritePositions
+        for (int i = 0; i < 3; i++) {
+			std::cout << "Sprite " << i << " X: " << spritePositions[i][0] << std::endl;
+			std::cout << "Sprite " << i << " Y: " << spritePositions[i][1] << std::endl;
+
+            if (spritePositions[i][0] == -1 && spritePositions[i][1] == -1) {
+				activeClients[i] = false;
+			}
+            else {
+				activeClients[i] = true;
+			}
 		}
 
-        if (bytesReceived == 0) {
-			std::cout << "Server disconnected" << std::endl;
-			closesocket(client_socket);
-			WSACleanup();
-			break;
-		}
-
-		buffer[bytesReceived] = '\0';
-		std::string receivedString(buffer);
-
-		std::cout << "Received: " << receivedString << std::endl;
-
-		
-		
+        std::cout << std::endl;
 
 	}
-}
-
-void clearClients() {
-    int i = 0;
-
-    while (true) {
-
-        if (activeClients[i] && clock() - activeClientsTime[i] > TIMEOUT) {
-            activeClients[i] = false;
-        }
-
-        if (i == 2) {
-            i = 0;
-        }
-        else {
-            i++;
-        }
-    }
 }
 
 void keyboardInputListener() {
@@ -150,7 +126,6 @@ void keyboardInputListener() {
     }
 }
 
-
 void updateParticles(std::vector<Particle>& particles, std::vector<sf::CircleShape>& particleShapes) {
     while (true){
         {
@@ -168,7 +143,6 @@ void updateParticles(std::vector<Particle>& particles, std::vector<sf::CircleSha
         }      
     }    
 }
-
 
 void moveExplorer(float moveX, float moveY) {
     sf::Vector2f currentCenter = explorerView.getCenter();
@@ -260,8 +234,7 @@ int main()
     std::thread keyboardThread(keyboardInputListener);
 
     std::thread sendLocationThread(sendLocation, client_socket, std::ref(explorerView));
-    std::thread receiveFromServerThread(receiveFromServer, client_socket);
-    std::thread clearClientsThread(clearClients);
+    std::thread receiveSpritePositionsThread(receiveSpritePositions, client_socket);
 
     sf::Clock deltaClock;
 
@@ -278,7 +251,6 @@ int main()
         // handle error
         return -1;
     }
-
 
     // Main loop
     while (mainWindow.isOpen())
@@ -298,18 +270,6 @@ int main()
 
         ImGui::SFML::Update(mainWindow, deltaClock.restart());
 
-        //sf::Sprite sprite;
-        //sf::Texture texture;
-        //if (!texture.loadFromFile("red.png")) {
-        //    // handle error
-        //    return -1;
-        //}
-
-        //sprite.setTexture(texture);
-        //sprite.setTextureRect(sf::IntRect(0, 0, 3, 3));
-        //sprite.setOrigin(sprite.getLocalBounds().width / 2, sprite.getLocalBounds().height / 2);
-        //sprite.setPosition(explorerView.getCenter());
-
         for (int i = 0; i < 3; ++i) {
             if (activeClients[i]) {
                 sprites[i].setTexture(textures[i]);
@@ -319,9 +279,11 @@ int main()
                 if (i == 0) {
 					sprites[i].setPosition(explorerView.getCenter());
 				}
+                else {
+                    sprites[i].setPosition(spritePositions[i][0], spritePositions[i][1]);
+                }
             }
         }
-
 
         mainWindow.setView(explorerView);
 

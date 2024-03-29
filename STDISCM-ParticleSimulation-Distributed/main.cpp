@@ -36,8 +36,8 @@ const int MAX_CLIENTS = 3;
 sf::View explorerView(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 19));
 
 sf::View explorerViews[3] = { sf::View(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 19)),   //client 1
-                             sf::View(sf::FloatRect(100 - 9.5, 200 - 16.5, 33, 19)),   //client 2
-                             sf::View(sf::FloatRect(800 - 9.5, 600 - 16.5, 33, 19)) }; //client 3
+                             sf::View(sf::FloatRect(645 - 9.5, 360 - 16.5, 33, 19)),   //client 2
+                             sf::View(sf::FloatRect(650 - 9.5, 360 - 16.5, 33, 19)) }; //client 3
 
 bool activeClients[3] = { false, false, false };
 clock_t activeClientsTime[3] = { 0, 0, 0 };
@@ -45,6 +45,8 @@ const clock_t TIMEOUT = 2 * CLOCKS_PER_SEC; // 2 seconds
 
 sf::Sprite sprites[3];
 sf::Texture textures[3];
+
+float spritePositions[3][2];
 
 std::atomic<bool> quitKeyPressed(false);
 void moveExplorer(float moveX, float moveY);
@@ -124,20 +126,26 @@ void receivePosition(SOCKET client_socket) {
     
 }
 
-void sendData(SOCKET client_socket) {
+void sendSpritePositions(SOCKET client_socket) {
     while (true) {
-
-        std::string message = "{0"; // 0 means server is sending sprite positions to client
 
         for (int i = 0; i < 3; i++) {
             if (activeClients[i]) {
-				message += " | {" + std::to_string(i) + "," + std::to_string(explorerViews[i].getCenter().x) + "," + std::to_string(explorerViews[i].getCenter().y) + "}";
+				spritePositions[i][0] = explorerViews[i].getCenter().x;
+				spritePositions[i][1] = explorerViews[i].getCenter().y;
 			}
+            else {
+                spritePositions[i][0] = -1;
+				spritePositions[i][1] = -1;
+            }
 		}
 
-		message += "}";
+        char buffer[sizeof(float) * 3 * 2];
+        memcpy(buffer, spritePositions, sizeof(float) * 3 * 2);
 
-		int bytesSent = send(client_socket, message.c_str(), message.size(), 0);
+        // Send the serialized data
+       
+        int bytesSent = send(client_socket, buffer, sizeof(buffer), 0);
         if (bytesSent == SOCKET_ERROR) {
 			std::cerr << "Send failed with error code: " << WSAGetLastError() << std::endl;
 			closesocket(client_socket);
@@ -172,7 +180,7 @@ void acceptClients(SOCKET server_socket) {
 
         // Start a new thread to handle communication with the client
         std::thread(receivePosition, client_socket).detach();
-        std::thread(sendData, client_socket).detach();
+        std::thread(sendSpritePositions, client_socket).detach();
 
       
         {
