@@ -36,12 +36,45 @@ sf::Texture textures[3];
 
 float spritePositions[3][2];
 
+std::mutex sendMutex;
+std::mutex receiveMutex;
+
+std::vector<Particle> particles;
+std::vector<sf::CircleShape> particleShapes;
+int particleCount = 0;
+
 std::atomic<bool> quitKeyPressed(false);
 void moveExplorer(float moveX, float moveY);
 
+std::vector<Particle> deserializeJsonToParticles(const std::string& jsonString) {
+    std::vector<Particle> particles;
+
+    // Parse the JSON string into a JSON object
+    nlohmann::json jsonData = nlohmann::json::parse(jsonString);
+
+    // Iterate over the JSON array
+    for (const auto& particleJson : jsonData) {
+        int id = particleJson["id"];
+        float posX = particleJson["posX"];
+        float posY = particleJson["posY"];
+        float angleDeg = particleJson["angleDeg"];
+        float speed = particleJson["speed"];
+
+        Particle particle(id, posX, posY, angleDeg, speed);
+
+        // Create a Particle object and add it to the vector
+        particles.emplace_back(particle);
+        particleShapes.push_back(sf::CircleShape(1, 10));
+        particleShapes.at(particles.size()).setPosition(particle.getPosX(), particle.getPosY());
+
+    }
+
+    return particles;
+}
+
 void sendLocation(SOCKET client_socket, sf::View& explorer) {
     while (true) {
-
+        sendMutex.lock();
         sf::Vector2 position = explorer.getCenter();
 
         std::string sendString = "(0, " + std::to_string(position.x) + ", " + std::to_string(position.y) + ")";
@@ -57,15 +90,37 @@ void sendLocation(SOCKET client_socket, sf::View& explorer) {
 
         // send this thread every X seconds
         std::this_thread::sleep_for(std::chrono::seconds(1));
+        sendMutex.unlock();
     }
 }
 
-void receiveSpritePositions(SOCKET client_socket) {
-    const int bufferSize = 1024;
-    char buffer[bufferSize];
-    int bytesReceived;
-
+void receiveParticles(SOCKET client_socket) {
     while (true) {
+        receiveMutex.lock();
+		char buffer[4096];
+		int bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
+        if (bytes_received == SOCKET_ERROR) {
+			std::cerr << "Error receiving data from server" << std::endl;
+			closesocket(client_socket);
+			WSACleanup();
+			break;
+		}
+
+		// Deserialize the data
+		std::string jsonString(buffer, bytes_received);
+		particles = deserializeJsonToParticles(jsonString);
+        particleCount = particles.size();
+
+        //print particleCount
+        std::cout << "Particle Count: " << particleCount << std::endl;
+		
+		receiveMutex.unlock();
+	}
+}
+
+void receiveSpritePositions(SOCKET client_socket) {
+    while (true) {
+        receiveMutex.lock();
         char buffer[sizeof(float) * 3 * 2];
         recv(client_socket, buffer, sizeof(buffer), 0);
 
@@ -86,6 +141,7 @@ void receiveSpritePositions(SOCKET client_socket) {
 		}
 
         std::cout << std::endl;
+        receiveMutex.unlock();
 
 	}
 }
@@ -209,9 +265,6 @@ int main()
     fpsText.setFillColor(sf::Color::Green);
     fpsText.setStyle(sf::Text::Bold | sf::Text::Underlined);
 
-	std::vector<Particle> particles;
-	std::vector<sf::CircleShape> particleShapes;
-    int particleCount = 0;
 
     
     /*
@@ -235,6 +288,8 @@ int main()
 
     std::thread sendLocationThread(sendLocation, client_socket, std::ref(explorerView));
     std::thread receiveSpritePositionsThread(receiveSpritePositions, client_socket);
+    std::thread receiveParticlesThread(receiveParticles, client_socket);
+
 
     sf::Clock deltaClock;
 

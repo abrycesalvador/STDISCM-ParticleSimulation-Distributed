@@ -48,8 +48,44 @@ sf::Texture textures[3];
 
 float spritePositions[3][2];
 
+std::mutex sendMutex;
+std::mutex receiveMutex;
+
+std::vector<Particle> particles;
+std::vector<sf::CircleShape> particleShapes;
+int particleCount = 0;
+
 std::atomic<bool> quitKeyPressed(false);
 void moveExplorer(float moveX, float moveY);
+
+nlohmann::json serializeParticles(const std::vector<Particle>& particles) {
+    nlohmann::json jsonArray;
+
+    for (const auto& particle : particles) {
+        jsonArray.push_back(particle.serializeToJson());
+    }
+
+    return jsonArray;
+}
+
+void sendParticles(SOCKET client_socket) {
+    while (true) {
+        sendMutex.lock();
+		nlohmann::json jsonArray = serializeParticles(particles);
+		std::string jsonString = jsonArray.dump();
+		std::cout << "Sending: " << jsonString << std::endl;
+
+		int bytesSent = send(client_socket, jsonString.c_str(), jsonString.size(), 0);
+        if (bytesSent == SOCKET_ERROR) {
+			std::cerr << "Send failed with error code: " << WSAGetLastError() << std::endl;
+			closesocket(client_socket);
+			break;
+		}
+
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+        sendMutex.unlock();
+	}
+}
 
 void receivePosition(SOCKET client_socket) {
     const int bufferSize = 1024;
@@ -63,6 +99,7 @@ void receivePosition(SOCKET client_socket) {
     std::string y;
 
     while (true) {
+        receiveMutex.lock();
         bytesReceived = recv(client_socket, buffer, bufferSize - 1, 0);
         if (bytesReceived > 0) {
             buffer[bytesReceived] = '\0'; 
@@ -115,6 +152,7 @@ void receivePosition(SOCKET client_socket) {
 
         //receive this thread every X seconds
         std::this_thread::sleep_for(std::chrono::seconds(1));
+        receiveMutex.unlock();
     } 
 
     closesocket(client_socket);
@@ -128,7 +166,7 @@ void receivePosition(SOCKET client_socket) {
 
 void sendSpritePositions(SOCKET client_socket) {
     while (true) {
-
+        sendMutex.lock();
         for (int i = 0; i < 3; i++) {
             if (activeClients[i]) {
 				spritePositions[i][0] = explorerViews[i].getCenter().x;
@@ -153,6 +191,7 @@ void sendSpritePositions(SOCKET client_socket) {
 		}
 
 		std::this_thread::sleep_for(std::chrono::seconds(1));
+        sendMutex.unlock();
 	}
 }
 
@@ -181,6 +220,7 @@ void acceptClients(SOCKET server_socket) {
         // Start a new thread to handle communication with the client
         std::thread(receivePosition, client_socket).detach();
         std::thread(sendSpritePositions, client_socket).detach();
+        std::thread(sendParticles, client_socket).detach();
 
       
         {
@@ -353,10 +393,6 @@ int main(){
     fpsText.setFont(font);
     fpsText.setFillColor(sf::Color::Green);
     fpsText.setStyle(sf::Text::Bold | sf::Text::Underlined);
-
-	std::vector<Particle> particles;
-	std::vector<sf::CircleShape> particleShapes;
-    int particleCount = 0;
 
     
     /*

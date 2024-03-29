@@ -36,6 +36,10 @@ sf::Texture textures[3];
 
 float spritePositions[3][2]; 
 
+std::vector<Particle> particles;
+std::vector<sf::CircleShape> particleShapes;
+int particleCount = 0;
+
 std::atomic<bool> quitKeyPressed(false);
 void moveExplorer(float moveX, float moveY);
 
@@ -209,9 +213,6 @@ int main()
     fpsText.setFillColor(sf::Color::Green);
     fpsText.setStyle(sf::Text::Bold | sf::Text::Underlined);
 
-	std::vector<Particle> particles;
-	std::vector<sf::CircleShape> particleShapes;
-    int particleCount = 0;
 
     
     /*

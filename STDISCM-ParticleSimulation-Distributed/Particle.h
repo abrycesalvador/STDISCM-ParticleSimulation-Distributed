@@ -2,6 +2,7 @@
 #include <iostream>
 #include <SFML/Graphics.hpp>
 #include "cmath"
+#include "json.hpp"
 
 #define PI 3.14159265358979323846
 
@@ -39,7 +40,7 @@ public:
 		posX += particleVector[0];
 		posY += particleVector[1];
 	}
-		
+
 	void checkCollision() {
 		if (posX > 1280 || posX < 0)
 			particleVector.at(0) = -particleVector.at(0);
@@ -53,5 +54,15 @@ public:
 
 	float getPosY() {
 		return posY;
+	}
+
+	nlohmann::json serializeToJson() const {
+		return {
+			{"id", id},
+			{"posX", posX},
+			{"posY", posY},
+			{"angleDeg", angle * 180 / PI}, // Convert angle back to degrees
+			{"speed", speed}
+		};
 	}
 };
