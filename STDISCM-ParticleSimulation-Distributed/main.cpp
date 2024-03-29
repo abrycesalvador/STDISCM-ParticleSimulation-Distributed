@@ -37,8 +37,10 @@ void receivePosition(SOCKET client_socket) {
     const int bufferSize = 1024;
     char buffer[bufferSize];
     int bytesReceived;
+    int client_num;
     float x_float;
     float y_float;
+    std::string client_num_str;
     std::string x;
     std::string y;
 
@@ -53,13 +55,15 @@ void receivePosition(SOCKET client_socket) {
             receivedData = receivedData.substr(1, receivedData.size() - 2);
             std::cout << "Received from client: " << receivedData << std::endl;
             std::istringstream iss(receivedData);
+            std::getline(iss, client_num_str, ',');
             std::getline(iss, x, ',');
             std::getline(iss, y);
 
+            client_num = std::stoi(client_num_str);
             x_float = std::stof(x);
             y_float = std::stof(y);
 
-            explorerView.setCenter(x_float, y_float);
+            //explorerView.setCenter(x_float, y_float);
 
         }
         else if (bytesReceived == 0) {
