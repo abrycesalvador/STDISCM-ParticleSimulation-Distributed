@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{614c2b4b-3349-4e24-b47b-0844b8915cb2}</ProjectGuid>
-    <RootNamespace>STDISCMParticleSimulationDistributedClient</RootNamespace>
+    <ProjectGuid>{47B9FBBC-F4A5-453C-B55E-391BBCDD49CF}</ProjectGuid>
+    <RootNamespace>STDISCMParticleSimulationDistributedClient3</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -149,7 +149,7 @@
     <ClCompile Include="imgui\imgui_draw.cpp" />
     <ClCompile Include="imgui\imgui_tables.cpp" />
     <ClCompile Include="imgui\imgui_widgets.cpp" />
-    <ClCompile Include="main_client.cpp" />
+    <ClCompile Include="main_client3.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

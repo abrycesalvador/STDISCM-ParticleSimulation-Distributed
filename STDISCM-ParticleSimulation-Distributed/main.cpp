@@ -28,7 +28,6 @@ bool readyToCompute = true;
 const int numThreads = std::thread::hardware_concurrency();
 int currentParticle = 0;
 
-
 sf::View explorerView(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 19));
 
 std::atomic<bool> quitKeyPressed(false);
