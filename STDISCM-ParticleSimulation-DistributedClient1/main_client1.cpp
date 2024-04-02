@@ -23,6 +23,7 @@ std::mutex mtx;
 std::condition_variable cv;
 bool readyToRender = false;
 bool readyToCompute = true;
+bool readyToReceive = true;
 const int numThreads = std::thread::hardware_concurrency();
 int currentParticle = 0;
 int mode = 1; // 0 - Dev; 1 - Explorer
@@ -42,18 +43,19 @@ std::mutex receiveMutex;
 std::vector<Particle> particles;
 std::vector<sf::CircleShape> particleShapes;
 int particleCount = 0;
+std::vector<Particle> received_particles;
+std::vector<sf::CircleShape> received_particleShapes;
 
 std::atomic<bool> quitKeyPressed(false);
 void moveExplorer(float moveX, float moveY);
 
-std::vector<Particle> deserializeJsonToParticles(const std::string& jsonString) {
-    std::vector<Particle> particles;
+void deserializeJsonToParticles(const nlohmann::json& jsonString) {
 
-    // Parse the JSON string into a JSON object
-    nlohmann::json jsonData = nlohmann::json::parse(jsonString);
+    received_particles.clear();
+    received_particleShapes.clear();
 
     // Iterate over the JSON array
-    for (const auto& particleJson : jsonData) {
+    for (const auto& particleJson : jsonString) {
         int id = particleJson["id"];
         float posX = particleJson["posX"];
         float posY = particleJson["posY"];
@@ -63,18 +65,17 @@ std::vector<Particle> deserializeJsonToParticles(const std::string& jsonString) 
         Particle particle(id, posX, posY, angleDeg, speed);
 
         // Create a Particle object and add it to the vector
-        particles.emplace_back(particle);
-        particleShapes.push_back(sf::CircleShape(1, 10));
-        particleShapes.at(particles.size()).setPosition(particle.getPosX(), particle.getPosY());
+
+        received_particles.emplace_back(particle);
+        received_particleShapes.push_back(sf::CircleShape(1, 10));
+        received_particleShapes.at(particles.size()).setPosition(particle.getPosX(), particle.getPosY());
 
     }
 
-    return particles;
 }
 
 void sendLocation(SOCKET client_socket, sf::View& explorer) {
     while (true) {
-        sendMutex.lock();
         sf::Vector2 position = explorer.getCenter();
 
         std::string sendString = "(0, " + std::to_string(position.x) + ", " + std::to_string(position.y) + ")";
@@ -90,13 +91,11 @@ void sendLocation(SOCKET client_socket, sf::View& explorer) {
 
         // send this thread every X seconds
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        sendMutex.unlock();
     }
 }
 
 void receiveParticles(SOCKET client_socket) {
     while (true) {
-        receiveMutex.lock();
 		char buffer[4096];
 		int bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
         if (bytes_received == SOCKET_ERROR) {
@@ -106,15 +105,30 @@ void receiveParticles(SOCKET client_socket) {
 			break;
 		}
 
-		// Deserialize the data
-		std::string jsonString(buffer, bytes_received);
-		particles = deserializeJsonToParticles(jsonString);
-        particleCount = particles.size();
+        // Deserialize the data
+        std::string jsonString(buffer, bytes_received);
+        nlohmann::json receivedJsonData = nlohmann::json::parse(jsonString);
+        
+        deserializeJsonToParticles(receivedJsonData);
 
-        //print particleCount
-        std::cout << "Particle Count: " << particleCount << std::endl;
-		
-		receiveMutex.unlock();
+
+        {   
+            std::unique_lock lock(mtx);
+            cv.wait(lock, [] { return readyToReceive; });
+
+            particles = received_particles;
+            particleShapes = received_particleShapes;
+
+            readyToCompute = true;
+            readyToReceive = false;
+            std::cout << "Ready to compute" << std::endl;
+            cv.notify_one();
+        }
+        
+
+        //print received string
+        std::cout << "Received: " << receivedJsonData << std::endl;
+
 	}
 }
 
@@ -129,8 +143,8 @@ void receiveSpritePositions(SOCKET client_socket) {
 
         //print spritePositions
         for (int i = 0; i < 3; i++) {
-			std::cout << "Sprite " << i << " X: " << spritePositions[i][0] << std::endl;
-			std::cout << "Sprite " << i << " Y: " << spritePositions[i][1] << std::endl;
+			/*std::cout << "Sprite " << i << " X: " << spritePositions[i][0] << std::endl;
+			std::cout << "Sprite " << i << " Y: " << spritePositions[i][1] << std::endl;*/
 
             if (spritePositions[i][0] == -1 && spritePositions[i][1] == -1) {
 				activeClients[i] = false;
@@ -194,6 +208,7 @@ void updateParticles(std::vector<Particle>& particles, std::vector<sf::CircleSha
             if (currentParticle > particles.size() - 1) {
                 readyToRender = true;
                 readyToCompute = false;
+                std::cout << "Ready to render" << std::endl;
                 cv.notify_one();
             }
         }      
@@ -243,6 +258,25 @@ int main()
         return 1;
     }
 
+    SOCKET client_particle_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (client_particle_socket == INVALID_SOCKET) {
+        std::cerr << "Error creating particle socket" << std::endl;
+        WSACleanup();
+        return 1;
+    }
+
+    sockaddr_in server_particle_address;
+    server_particle_address.sin_family = AF_INET;
+    server_particle_address.sin_port = htons(5002); // Port number of the server
+    inet_pton(AF_INET, SERVER_IP, &server_particle_address.sin_addr);
+
+    if (connect(client_particle_socket, reinterpret_cast<SOCKADDR*>(&server_particle_address), sizeof(server_particle_address)) == SOCKET_ERROR) {
+        std::cerr << "Error connecting to server (particle)" << std::endl;
+        closesocket(client_particle_socket);
+        WSACleanup();
+        return 1;
+    }
+
     std::cout << "Connected to server" << std::endl;
 
     // Create the main window
@@ -288,7 +322,7 @@ int main()
 
     std::thread sendLocationThread(sendLocation, client_socket, std::ref(explorerView));
     std::thread receiveSpritePositionsThread(receiveSpritePositions, client_socket);
-    std::thread receiveParticlesThread(receiveParticles, client_socket);
+    std::thread receiveParticlesThread(receiveParticles, client_particle_socket);
 
 
     sf::Clock deltaClock;
@@ -376,9 +410,10 @@ int main()
             for (int i = 0; i < particleShapes.size(); i++) {
                 mainWindow.draw(particleShapes[i]);
             }
-            readyToCompute = true;
+            readyToReceive = true;
             readyToRender = false;
             currentParticle = 0;
+            std::cout << "Ready to receive" << std::endl;
             cv.notify_all();
             lock.unlock();
         }

@@ -70,20 +70,20 @@ nlohmann::json serializeParticles(const std::vector<Particle>& particles) {
 
 void sendParticles(SOCKET client_socket) {
     while (true) {
-        sendMutex.lock();
-		nlohmann::json jsonArray = serializeParticles(particles);
-		std::string jsonString = jsonArray.dump();
-		std::cout << "Sending: " << jsonString << std::endl;
+        if (particles.size() > 0) {
+		    nlohmann::json jsonArray = serializeParticles(particles);
+		    std::string jsonString = jsonArray.dump();
+		    std::cout << "Sending: " << jsonString << std::endl;
 
-		int bytesSent = send(client_socket, jsonString.c_str(), jsonString.size(), 0);
-        if (bytesSent == SOCKET_ERROR) {
-			std::cerr << "Send failed with error code: " << WSAGetLastError() << std::endl;
-			closesocket(client_socket);
-			break;
-		}
+		    int bytesSent = send(client_socket, jsonString.c_str(), jsonString.size(), 0);
+            if (bytesSent == SOCKET_ERROR) {
+			    std::cerr << "Send failed with error code: " << WSAGetLastError() << std::endl;
+			    closesocket(client_socket);
+			    break;
+		    }
 
-		std::this_thread::sleep_for(std::chrono::seconds(1));
-        sendMutex.unlock();
+		    std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
 	}
 }
 
@@ -195,7 +195,7 @@ void sendSpritePositions(SOCKET client_socket) {
 	}
 }
 
-void acceptClients(SOCKET server_socket) {
+void acceptClients(SOCKET server_socket, SOCKET server_particle_socket) {
     while (true) {
         {
             std::lock_guard<std::mutex> lock(clientCountMutex);
@@ -217,10 +217,21 @@ void acceptClients(SOCKET server_socket) {
             continue;
         }
 
+        SOCKET client_particle_socket;
+        sockaddr_in client_particle_address;
+        int client_particle_address_size = sizeof(client_particle_address);
+        client_particle_socket = accept(server_particle_socket, reinterpret_cast<SOCKADDR*>(&client_particle_address), &client_particle_address_size);
+        if (client_particle_socket == INVALID_SOCKET) {
+            std::cerr << "Error accepting connection" << std::endl;
+            closesocket(server_socket);
+            WSACleanup();
+            continue;
+        }
+
         // Start a new thread to handle communication with the client
         std::thread(receivePosition, client_socket).detach();
         std::thread(sendSpritePositions, client_socket).detach();
-        std::thread(sendParticles, client_socket).detach();
+        std::thread(sendParticles, client_particle_socket).detach();
 
       
         {
@@ -356,6 +367,34 @@ int main(){
         return 1;
     }
 
+    SOCKET server_particle_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (server_particle_socket == INVALID_SOCKET) {
+        std::cerr << "Error creating particle socket" << std::endl;
+        WSACleanup();
+        return 1;
+    }
+
+    sockaddr_in server_particle_address;
+    server_particle_address.sin_family = AF_INET;
+    server_particle_address.sin_port = htons(5002); // Port number on which the server will listen
+    inet_pton(AF_INET, SERVER_IP, &server_particle_address.sin_addr);
+
+    // Bind the socket to the specified IP address and port
+    if (bind(server_particle_socket, reinterpret_cast<SOCKADDR*>(&server_particle_address), sizeof(server_particle_address)) == SOCKET_ERROR) {
+        std::cerr << "Error binding particle socket" << std::endl;
+        closesocket(server_particle_socket);
+        WSACleanup();
+        return 1;
+    }
+
+    // Listen for incoming connections
+    if (listen(server_particle_socket, SOMAXCONN) == SOCKET_ERROR) {
+        std::cerr << "Error listening on particle socket" << std::endl;
+        closesocket(server_particle_socket);
+        WSACleanup();
+        return 1;
+    }
+
     std::cout << "Server is listening..." << std::endl;
 
     /*SOCKET client_socket;
@@ -371,7 +410,7 @@ int main(){
 
     std::cout << "Client connected" << std::endl;*/
     
-    std::thread acceptClientsThread(acceptClients, server_socket);
+    std::thread acceptClientsThread(acceptClients, server_socket, server_particle_socket);
     std::thread clearClientsThread(clearClients);
 
     // Create the main window
