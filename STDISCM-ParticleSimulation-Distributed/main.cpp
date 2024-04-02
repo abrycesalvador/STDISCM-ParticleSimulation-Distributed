@@ -50,54 +50,39 @@ std::atomic<bool> quitKeyPressed(false);
 void moveExplorer(float moveX, float moveY);
 
 void receivePosition(SOCKET client_socket) {
-    const int bufferSize = 1024;
+    const int bufferSize = 4096;
     char buffer[bufferSize];
     int bytesReceived;
-    int client_num;
-    float x_float;
-    float y_float;
-    std::string client_num_str;
-    std::string x;
-    std::string y;
 
     while (true) {
         bytesReceived = recv(client_socket, buffer, bufferSize - 1, 0);
         if (bytesReceived > 0) {
-            buffer[bytesReceived] = '\0'; 
+            buffer[bytesReceived] = '\0';
 
-            std::string receivedData(buffer);
-            std::cout << "Received string from client: " << receivedData << std::endl;
-
-            receivedData = receivedData.substr(1, receivedData.size() - 2);
-            std::cout << "Received from client: " << receivedData << std::endl;
-            std::istringstream iss(receivedData);
-            std::getline(iss, client_num_str, ',');
-            std::getline(iss, x, ',');
-            std::getline(iss, y);
-
-            client_num = std::stoi(client_num_str);
-            x_float = std::stof(x);
-            y_float = std::stof(y);
+            // Parse the received data directly from the buffer
+            int client_num;
+            float x_float;
+            float y_float;
+            sscanf_s(buffer, "(%d,%f,%f)", &client_num, &x_float, &y_float);
 
             if (client_num == 0) {
                 activeClients[0] = true;
                 explorerViews[0].setCenter(x_float, y_float);
             }
             else if (client_num == 1) {
-				activeClients[1] = true;
-				explorerViews[1].setCenter(x_float, y_float);
-			}
+                activeClients[1] = true;
+                explorerViews[1].setCenter(x_float, y_float);
+            }
             else if (client_num == 2) {
                 activeClients[2] = true;
                 explorerViews[2].setCenter(x_float, y_float);
             }
 
             activeClientsTime[client_num] = clock();
-
         }
         else if (bytesReceived == 0) {
             std::cout << "Connection closed by the client." << std::endl;
-            break; 
+            break;
         }
         else {
             std::cerr << "Receive failed with error code: " << WSAGetLastError() << std::endl;
@@ -108,21 +93,21 @@ void receivePosition(SOCKET client_socket) {
                 clientCount--;
             }
 
-            break; 
+            break;
         }
 
-        //receive this thread every X seconds
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    } 
+        // Receive in a separate thread every X seconds
+        //std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    }
 
     closesocket(client_socket);
-    
+
     {
         std::lock_guard<std::mutex> lock(clientCountMutex);
         clientCount--;
     }
-    
 }
+
 
 void acceptClients(SOCKET server_socket) {
     while (true) {
@@ -174,42 +159,6 @@ void clearClients() {
 		}
     }
 }
-//void keyboardInputListener() {
-//    while (!quitKeyPressed) {
-//        float moveX = 5, moveY = 2.5;   // Change values for how distance explorer moves.
-//
-//        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q)) {
-//            mode = (mode == 0) ? 1 : 0;
-//            std::cout << "Mode switched to: " << mode << std::endl;
-//
-//            if (mode) {
-//                std::cout << "Last logged explorer X: " << explorerView.getCenter().x << std::endl;
-//                std::cout << "Last logged explorer Y: " << explorerView.getCenter().y << std::endl << std::endl;
-//            }//
-//
-//            std::this_thread::sleep_for(std::chrono::milliseconds(200)); // Debounce time to avoid rapid mode switching
-//
-//        }
-//        if (mode && (sf::Keyboard::isKeyPressed(sf::Keyboard::W) || sf::Keyboard::isKeyPressed(sf::Keyboard::Up))) {
-//            moveExplorer(0, -moveY);
-//            std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Debounce time to avoid rapid movement
-//        }
-//        if (mode && (sf::Keyboard::isKeyPressed(sf::Keyboard::A) || sf::Keyboard::isKeyPressed(sf::Keyboard::Left))) {
-//            moveExplorer(-moveX, 0);
-//            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-//        }
-//        if (mode && (sf::Keyboard::isKeyPressed(sf::Keyboard::S) || sf::Keyboard::isKeyPressed(sf::Keyboard::Down))) {
-//            moveExplorer(0, moveY);
-//            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-//        }
-//        if (mode && (sf::Keyboard::isKeyPressed(sf::Keyboard::D) || sf::Keyboard::isKeyPressed(sf::Keyboard::Right))) {
-//            moveExplorer(moveX, 0);
-//            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-//        }
-//
-//    }
-//}
-
 
 void updateParticles(std::vector<Particle>& particles, std::vector<sf::CircleShape>& particleShapes) {
     while (true){
@@ -302,7 +251,7 @@ int main(){
 
     // Create the main window
     sf::RenderWindow mainWindow(sf::VideoMode(1280, 720), "Particle Simulator");
-    mainWindow.setFramerateLimit(60);
+    //mainWindow.setFramerateLimit(60);
     ImGui::SFML::Init(mainWindow);
 
     auto lastFPSDrawTime = std::chrono::steady_clock::now();

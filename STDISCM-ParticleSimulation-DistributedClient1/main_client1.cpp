@@ -51,7 +51,7 @@ void sendLocation(SOCKET client_socket, sf::View& explorer) {
         }
 
         // send this thread every X seconds
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
 }
 
