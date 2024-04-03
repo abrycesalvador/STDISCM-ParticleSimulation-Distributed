@@ -22,6 +22,7 @@
 #define SERVER_IP "127.0.0.1"
 
 std::mutex mtx;
+std::mutex particleShapes_mtx;
 std::condition_variable cv;
 bool readyToRender = false;
 bool readyToCompute = true;
@@ -97,7 +98,7 @@ void receivePosition(SOCKET client_socket) {
         }
 
         // Receive in a separate thread every X seconds
-        //std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 
     closesocket(client_socket);
@@ -108,8 +109,52 @@ void receivePosition(SOCKET client_socket) {
     }
 }
 
+//// send particle positions to client
+//void sendPositionThread(SOCKET client_socket, std::vector<Particle>& particles) {
+//    while (true) {
+//        // Send the position of each particle to the client
+//        std::unique_lock<std::mutex> lock(mtx);
+//        cv.wait(lock, [] { return readyToRender; });
+//        for (int i = 0; i < particles.size(); i++) {
+//			std::string serializedParticle = particles[i].serialize();
+//            // deserialize the particle
+//            Particle particle = Particle::deserialize(serializedParticle);
+//            //std::cout << "ID: " << particle.getId() << " | X: " << particle.getPosX() << " | Y: " << particle.getPosY() << std::endl;
+//			send(client_socket, serializedParticle.c_str(), serializedParticle.size(), 0);
+//		}
+//        // sleep for 5 ms
+//        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+//	}
+//}
 
-void acceptClients(SOCKET server_socket) {
+void sendPositionThread(SOCKET client_socket, std::vector<Particle>& particles) {
+    std::vector<Particle> sentParticles;
+
+    while (true) {
+        if (sentParticles.size() == particles.size()) {
+            continue;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        else {
+            // Send the position of each particle to the client
+            std::unique_lock<std::mutex> lock(mtx);
+            cv.wait(lock, [] { return readyToRender; });
+            for (int i = 0; i < particles.size(); i++) {
+                std::string serializedParticle = particles[i].serialize();
+                // deserialize the particle
+                Particle particle = Particle::deserialize(serializedParticle);
+                //std::cout << "ID: " << particle.getId() << " | X: " << particle.getPosX() << " | Y: " << particle.getPosY() << std::endl;
+                send(client_socket, serializedParticle.c_str(), serializedParticle.size(), 0);
+            }
+            // sleep for 5 ms
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+
+    }
+}
+
+
+void acceptClients(SOCKET server_socket, std::vector<Particle>& particles) {
     while (true) {
         {
             std::lock_guard<std::mutex> lock(clientCountMutex);
@@ -133,6 +178,7 @@ void acceptClients(SOCKET server_socket) {
 
         // Start a new thread to handle communication with the client
         std::thread(receivePosition, client_socket).detach();
+        std::thread(sendPositionThread, client_socket, std::ref(particles)).detach();
 
         {
             std::lock_guard<std::mutex> lock(clientCountMutex);
@@ -172,7 +218,7 @@ void updateParticles(std::vector<Particle>& particles, std::vector<sf::CircleSha
             if (currentParticle > particles.size() - 1) {
                 readyToRender = true;
                 readyToCompute = false;
-                cv.notify_one();
+                cv.notify_all();
             }
         }      
     }    
@@ -245,13 +291,16 @@ int main(){
     }
 
     std::cout << "Client connected" << std::endl;*/
+    std::vector<Particle> particles;
+    std::vector<sf::CircleShape> particleShapes;
+    int particleCount = 0;
     
-    std::thread acceptClientsThread(acceptClients, server_socket);
+    std::thread acceptClientsThread(acceptClients, server_socket, std::ref(particles));
     std::thread clearClientsThread(clearClients);
 
     // Create the main window
     sf::RenderWindow mainWindow(sf::VideoMode(1280, 720), "Particle Simulator");
-    //mainWindow.setFramerateLimit(60);
+    mainWindow.setFramerateLimit(60);
     ImGui::SFML::Init(mainWindow);
 
     auto lastFPSDrawTime = std::chrono::steady_clock::now();
@@ -269,11 +318,11 @@ int main(){
     fpsText.setFillColor(sf::Color::Green);
     fpsText.setStyle(sf::Text::Bold | sf::Text::Underlined);
 
-	std::vector<Particle> particles;
-	std::vector<sf::CircleShape> particleShapes;
-    int particleCount = 0;
+
 
     
+
+
     /*
     // SAMPLE PARTICLES
     for (int i = 0; i < numInitParticles; i++) {
@@ -492,7 +541,7 @@ int main(){
         mainWindow.draw(explorerArea);
 
         if (particleShapes.size() > 0) {
-            std::unique_lock lock(mtx);
+            std::unique_lock lock(particleShapes_mtx);
             cv.wait(lock, [] { return readyToRender; });
             for (int i = 0; i < particleShapes.size(); i++) {
                 mainWindow.draw(particleShapes[i]);

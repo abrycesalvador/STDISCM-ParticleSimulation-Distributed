@@ -9,11 +9,12 @@
 #include <ws2tcpip.h>
 
 
-#include "Particle.h"
+//#include "Particle.h"
 #include "FPS.cpp"
 
 #include "imgui/imgui.h"
 #include "imgui/imgui-SFML.h"
+#include "../STDISCM-ParticleSimulation-Distributed/Particle.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -41,7 +42,7 @@ void sendLocation(SOCKET client_socket, sf::View& explorer) {
 
         int bytes_sent = send(client_socket, sendString.c_str(), sendString.size(), 0);
 
-        std::cout << "Sent: " << bytes_sent << std::endl;
+        //std::cout << "Sent: " << bytes_sent << std::endl;
         
         if (bytes_sent == SOCKET_ERROR) {
             std::cerr << "Error sending data to server" << std::endl;
@@ -53,6 +54,67 @@ void sendLocation(SOCKET client_socket, sf::View& explorer) {
         // send this thread every X seconds
         //std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
+}
+
+void receiveParticleData(SOCKET client_socket, std::vector<Particle>& particles, std::vector<sf::CircleShape>& particleShapes) {
+    while (true) {
+		char buffer[4096];
+		int bytes_received = recv(client_socket, buffer, 4096, 0);
+        if (bytes_received == SOCKET_ERROR) {
+			std::cerr << "Error receiving data from server" << std::endl;
+			/*closesocket(client_socket);
+			WSACleanup();*/
+			break;
+		}
+        else if (bytes_received == 0) {
+			std::cout << "Connection closed by server" << std::endl;
+			/*closesocket(client_socket);
+			WSACleanup();*/
+			break;
+		}
+        else {
+			buffer[bytes_received] = '\0';
+            int particleId = -1;
+            bool particleExists = false;
+            Particle particle = Particle::deserialize(std::string(buffer));
+
+            if (particles.empty()) {
+                particles.push_back(particle);
+				particleId = 0;
+            }
+            else 
+            {
+                for (int i = 0; i < particles.size(); i++) {
+                    if (particles.at(i).getId() == particle.getId()) {
+                        particleExists = true;
+                        particles.at(i) = particle;
+                        particleId = particle.getId();
+                        break;
+                    }
+                    else {
+                        particles.push_back(particle);
+                        particleId = particles.size() - 1;
+                    }
+                }
+            }
+            // add a new circle shape to the vector, or overwrite the existing one based on the particle id
+            sf::CircleShape particleShape(3);
+            particleShape.setFillColor(sf::Color::Red);
+            particleShape.setOrigin(particleShape.getRadius(), particleShape.getRadius());
+            particleShape.setPosition(particle.getPosX(), particle.getPosY());
+            // add a particle shape at position particleId
+            if (!particleExists) {
+                //std::cout << "case  1" << std::endl;
+				particleShapes.push_back(particleShape);
+			}
+            else{
+                //std::cout << "case  2" << std::endl;
+                particleShapes.at(particleId).setPosition(particles.at(particleId).getPosX(), particles.at(particleId).getPosY());
+			}
+            readyToRender = true;
+            cv.notify_one();
+		}
+	}
 }
 
 
@@ -98,8 +160,6 @@ void updateParticles(std::vector<Particle>& particles, std::vector<sf::CircleSha
         {
             std::unique_lock lk(mtx);
             cv.wait(lk, [&particles] { return readyToCompute && particles.size() > 0; });
-            particles.at(currentParticle).checkCollision();
-            particles.at(currentParticle).updateParticlePosition();
             particleShapes.at(currentParticle).setPosition(particles.at(currentParticle).getPosX(), particles.at(currentParticle).getPosY());
             currentParticle++;
             if (currentParticle > particles.size() - 1) {
@@ -157,6 +217,8 @@ int main()
 
     std::cout << "Connected to server" << std::endl;
 
+    
+
     // Create the main window
     sf::RenderWindow mainWindow(sf::VideoMode(1280, 720), "Particle Simulator Client 1");
     mainWindow.setFramerateLimit(60);
@@ -181,23 +243,14 @@ int main()
 	std::vector<sf::CircleShape> particleShapes;
     int particleCount = 0;
 
-    
-    /*
-    // SAMPLE PARTICLES
-    for (int i = 0; i < numInitParticles; i++) {
-		//particles.push_back(Particle(i, 100, 100, i, 5));
-        particles.push_back(Particle(i, rand() % 1280, rand() % 720, rand() % 360, 5));
-		particleShapes.push_back(sf::CircleShape(4, 10));
-		particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
-		particleShapes.at(i).setFillColor(sf::Color::Red);
-		particleCount++;
-	}*/
+    // start a thread to receive particle data
+    std::thread receiveParticleDataThread(receiveParticleData, client_socket, std::ref(particles), std::ref(particleShapes));
 
 	std::vector<std::thread> threads;
 
-	for (int i = 0; i < numThreads; ++i) {
-		threads.emplace_back(updateParticles, std::ref(particles), std::ref(particleShapes));
-	}
+	//for (int i = 0; i < numThreads; ++i) {
+	//	threads.emplace_back(updateParticles, std::ref(particles), std::ref(particleShapes));
+	//}
 
     std::thread keyboardThread(keyboardInputListener);
 
