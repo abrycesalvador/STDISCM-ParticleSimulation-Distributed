@@ -82,8 +82,7 @@ void receiveParticleData(SOCKET client_socket, std::vector<Particle>& particles,
                 particles.push_back(particle);
 				particleId = 0;
             }
-            else 
-            {
+            else {
                 for (int i = 0; i < particles.size(); i++) {
                     if (particles.at(i).getId() == particle.getId()) {
                         particleExists = true;
@@ -91,10 +90,10 @@ void receiveParticleData(SOCKET client_socket, std::vector<Particle>& particles,
                         particleId = particle.getId();
                         break;
                     }
-                    else {
-                        particles.push_back(particle);
-                        particleId = particles.size() - 1;
-                    }
+                }
+                if (!particleExists) {
+                    particles.push_back(particle);
+                    particleId = particles.size() - 1;
                 }
             }
             // add a new circle shape to the vector, or overwrite the existing one based on the particle id
