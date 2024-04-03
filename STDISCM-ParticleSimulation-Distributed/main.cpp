@@ -126,10 +126,6 @@ void receivePosition(SOCKET client_socket) {
 //	}
 //}
 
-/**
-* BUG: Sending 2 or more particles causes a crash. Sending 1 particle at a time is okay. It can handle multiple particles as long as you send it one at a time.
-* - Conenction error maybe? Maybe how it sends the particles I am not sure.
-*/
 void sendPositionThread(SOCKET client_socket, std::vector<Particle>& particles) {
     while (true) {
         std::unique_lock<std::mutex> lock(mtx);
