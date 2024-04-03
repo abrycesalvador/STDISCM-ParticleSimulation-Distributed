@@ -10,7 +10,6 @@
 #include <sstream>
 #include <string>
 
-
 #include "Particle.h"
 #include "FPS.cpp"
 
@@ -127,31 +126,32 @@ void receivePosition(SOCKET client_socket) {
 //	}
 //}
 
+/**
+* BUG: Sending 2 or more particles causes a crash. Sending 1 particle at a time is okay. It can handle multiple particles as long as you send it one at a time.
+* - Conenction error maybe? Maybe how it sends the particles I am not sure.
+*/
 void sendPositionThread(SOCKET client_socket, std::vector<Particle>& particles) {
-    std::vector<Particle> sentParticles;
-
     while (true) {
-        if (sentParticles.size() == particles.size()) {
-            continue;
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        }
-        else {
-            // Send the position of each particle to the client
-            std::unique_lock<std::mutex> lock(mtx);
-            cv.wait(lock, [] { return readyToRender; });
-            for (int i = 0; i < particles.size(); i++) {
-                std::string serializedParticle = particles[i].serialize();
-                // deserialize the particle
-                Particle particle = Particle::deserialize(serializedParticle);
-                //std::cout << "ID: " << particle.getId() << " | X: " << particle.getPosX() << " | Y: " << particle.getPosY() << std::endl;
-                send(client_socket, serializedParticle.c_str(), serializedParticle.size(), 0);
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait(lock, [] { return readyToRender; });
+
+        for (auto& particle : particles) {
+            std::string serializedParticle = particle.serialize() + "\n"; // Adding a newline as a delimiter
+            int totalSent = 0;
+            while (totalSent < serializedParticle.length()) {
+                int sent = send(client_socket, serializedParticle.c_str() + totalSent, serializedParticle.length() - totalSent, 0);
+                if (sent == SOCKET_ERROR) {
+                    // Handle error, e.g., break the loop or close socket
+                    break;
+                }
+                totalSent += sent;
             }
-            // sleep for 5 ms
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
 
+        std::this_thread::sleep_for(std::chrono::milliseconds(5)); // Small delay to prevent tight loop in case of error
     }
 }
+
 
 
 void acceptClients(SOCKET server_socket, std::vector<Particle>& particles) {
