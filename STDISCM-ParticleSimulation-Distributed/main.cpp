@@ -19,6 +19,7 @@
 #pragma comment(lib, "ws2_32.lib")
 
 #define SERVER_IP "127.0.0.1"
+#define MAX_BUFFER_SIZE 4096
 
 std::mutex mtx;
 std::mutex particleShapes_mtx;
@@ -50,14 +51,14 @@ std::atomic<bool> quitKeyPressed(false);
 void moveExplorer(float moveX, float moveY);
 
 void receivePosition(SOCKET client_socket) {
-    const int bufferSize = 4096;
-    char buffer[bufferSize];
     int bytesReceived;
-
+    char buffer[MAX_BUFFER_SIZE];
     while (true) {
-        bytesReceived = recv(client_socket, buffer, bufferSize - 1, 0);
+        memset(buffer, 0, MAX_BUFFER_SIZE);
+        bytesReceived = recv(client_socket, buffer, MAX_BUFFER_SIZE - 1, 0);
         if (bytesReceived > 0) {
             buffer[bytesReceived] = '\0';
+            //std::cout << "Received: " << buffer << std::endl;
 
             // Parse the received data directly from the buffer
             int client_num;
@@ -65,20 +66,11 @@ void receivePosition(SOCKET client_socket) {
             float y_float;
             sscanf_s(buffer, "(%d,%f,%f)", &client_num, &x_float, &y_float);
 
-            if (client_num == 0) {
-                activeClients[0] = true;
-                explorerViews[0].setCenter(x_float, y_float);
+            if (client_num >= 0 && client_num < 3) {
+                activeClients[client_num] = true;
+                explorerViews[client_num].setCenter(x_float, y_float);
+                activeClientsTime[client_num] = clock();
             }
-            else if (client_num == 1) {
-                activeClients[1] = true;
-                explorerViews[1].setCenter(x_float, y_float);
-            }
-            else if (client_num == 2) {
-                activeClients[2] = true;
-                explorerViews[2].setCenter(x_float, y_float);
-            }
-
-            activeClientsTime[client_num] = clock();
         }
         else if (bytesReceived == 0) {
             std::cout << "Connection closed by the client." << std::endl;
@@ -95,16 +87,6 @@ void receivePosition(SOCKET client_socket) {
 
             break;
         }
-
-        // Receive in a separate thread every X seconds
-        //std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
-
-    closesocket(client_socket);
-
-    {
-        std::lock_guard<std::mutex> lock(clientCountMutex);
-        clientCount--;
     }
 }
 
