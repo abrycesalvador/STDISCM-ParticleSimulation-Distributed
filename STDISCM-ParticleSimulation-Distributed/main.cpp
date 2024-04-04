@@ -1,3 +1,5 @@
+// TODO: Fix issue with client sprites disappearing after not moving for a while
+
 #include <SFML/Graphics.hpp>
 #include <iostream>
 #include <math.h>
