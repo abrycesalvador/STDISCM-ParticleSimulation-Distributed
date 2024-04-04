@@ -144,7 +144,7 @@ void sendPositionThread(SOCKET client_socket, std::vector<Particle>& particles) 
             }
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(5)); // Small delay to prevent tight loop in case of error
+        //std::this_thread::sleep_for(std::chrono::milliseconds(5)); // Small delay to prevent tight loop in case of error
     }
 }
 

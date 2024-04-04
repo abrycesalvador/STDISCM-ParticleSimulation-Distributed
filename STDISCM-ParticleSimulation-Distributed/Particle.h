@@ -21,6 +21,15 @@ public:
 		setParticleVector();
 	}
 
+	Particle(int id, float posX, float posY) {
+		this->particleVector = { 0, 0 };
+		this->id = id;
+		this->posX = posX;
+		this->posY = posY;
+		this->angle = 0;
+		this->speed = 0;
+	}
+
 private:
 	std::vector<float> particleVector;
 	float angle;
@@ -62,7 +71,7 @@ public:
 
 	std::string serialize() {
 		std::stringstream ss;
-		ss << "(" << id << "," << posX << "," << posY << "," << angle << "," << speed << ")";
+		ss << "(" << id << "," << posX << "," << posY << ")";
 		return ss.str();
 	}
 
@@ -71,8 +80,9 @@ public:
 		int id;
 		float posX, posY, angle, speed;
 		char c;
-		ss >> c >> id >> c >> posX >> c >> posY >> c >> angle >> c >> speed >> c;
+		ss >> c >> id >> c >> posX >> c >> posY >> c;
 
-		return Particle(id, posX, posY, angle, speed);
+
+		return Particle(id, posX, posY);
 	}
 };

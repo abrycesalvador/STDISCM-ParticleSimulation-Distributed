@@ -7,6 +7,7 @@
 #include <mutex>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <map>
 
 
 //#include "Particle.h"
@@ -56,66 +57,32 @@ void sendLocation(SOCKET client_socket, sf::View& explorer) {
     }
 }
 
-void receiveParticleData(SOCKET client_socket, std::vector<Particle>& particles, std::vector<sf::CircleShape>& particleShapes) {
+void receiveParticleData(SOCKET client_socket, std::map<int, sf::CircleShape>& particleShapes) {
     while (true) {
-		char buffer[4096];
-		int bytes_received = recv(client_socket, buffer, 4096, 0);
+        std::string buffer(4096, '\0');
+        int bytes_received = recv(client_socket, &buffer[0], buffer.size(), 0);
         if (bytes_received == SOCKET_ERROR) {
-			std::cerr << "Error receiving data from server" << std::endl;
-			/*closesocket(client_socket);
-			WSACleanup();*/
-			break;
-		}
+            std::cerr << "Error receiving data from server" << std::endl;
+            break;
+        }
         else if (bytes_received == 0) {
-			std::cout << "Connection closed by server" << std::endl;
-			/*closesocket(client_socket);
-			WSACleanup();*/
-			break;
-		}
+            std::cout << "Connection closed by server" << std::endl;
+            break;
+        }
         else {
-			buffer[bytes_received] = '\0';
-            int particleId = -1;
-            bool particleExists = false;
-            Particle particle = Particle::deserialize(std::string(buffer));
-
-            if (particles.empty()) {
-                particles.push_back(particle);
-				particleId = 0;
-            }
-            else {
-                for (int i = 0; i < particles.size(); i++) {
-                    if (particles.at(i).getId() == particle.getId()) {
-                        particleExists = true;
-                        particles.at(i) = particle;
-                        particleId = particle.getId();
-                        break;
-                    }
-                }
-                if (!particleExists) {
-                    particles.push_back(particle);
-                    particleId = particles.size() - 1;
-                }
-            }
-            // add a new circle shape to the vector, or overwrite the existing one based on the particle id
-            sf::CircleShape particleShape(3);
-            particleShape.setFillColor(sf::Color::Red);
+            buffer.resize(bytes_received);
+            std::cout << buffer << std::endl;
+            Particle particle = Particle::deserialize(std::move(buffer));
+            sf::CircleShape particleShape(1);
             particleShape.setOrigin(particleShape.getRadius(), particleShape.getRadius());
             particleShape.setPosition(particle.getPosX(), particle.getPosY());
-            // add a particle shape at position particleId
-            if (!particleExists) {
-                //std::cout << "case  1" << std::endl;
-				particleShapes.push_back(particleShape);
-			}
-            else{
-                //std::cout << "case  2" << std::endl;
-                particleShapes.at(particleId).setPosition(particles.at(particleId).getPosX(), particles.at(particleId).getPosY());
-			}
+            //std::cout << particle.getId() << std::endl;
+            particleShapes[particle.getId()] = std::move(particleShape);
             readyToRender = true;
             cv.notify_one();
-		}
-	}
+        }
+    }
 }
-
 
 void keyboardInputListener() {
     while (!quitKeyPressed) {
@@ -238,12 +205,11 @@ int main()
     fpsText.setFillColor(sf::Color::Green);
     fpsText.setStyle(sf::Text::Bold | sf::Text::Underlined);
 
-	std::vector<Particle> particles;
-	std::vector<sf::CircleShape> particleShapes;
+	std::map<int, sf::CircleShape> particleShapes;
     int particleCount = 0;
 
     // start a thread to receive particle data
-    std::thread receiveParticleDataThread(receiveParticleData, client_socket, std::ref(particles), std::ref(particleShapes));
+    std::thread receiveParticleDataThread(receiveParticleData, client_socket, std::ref(particleShapes));
 
 	std::vector<std::thread> threads;
 
@@ -260,6 +226,7 @@ int main()
     // Main loop
     while (mainWindow.isOpen())
     {
+        //std::cout << particleShapes.size() << std::endl;
         auto currentFPSTime = std::chrono::steady_clock::now();
         auto elapsedFPSTime = std::chrono::duration_cast<std::chrono::milliseconds>(currentFPSTime - lastFPSDrawTime);
 
