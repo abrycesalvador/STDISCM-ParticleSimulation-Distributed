@@ -90,43 +90,26 @@ void receivePosition(SOCKET client_socket) {
     }
 }
 
-//// send particle positions to client
-//void sendPositionThread(SOCKET client_socket, std::vector<Particle>& particles) {
-//    while (true) {
-//        // Send the position of each particle to the client
-//        std::unique_lock<std::mutex> lock(mtx);
-//        cv.wait(lock, [] { return readyToRender; });
-//        for (int i = 0; i < particles.size(); i++) {
-//			std::string serializedParticle = particles[i].serialize();
-//            // deserialize the particle
-//            Particle particle = Particle::deserialize(serializedParticle);
-//            //std::cout << "ID: " << particle.getId() << " | X: " << particle.getPosX() << " | Y: " << particle.getPosY() << std::endl;
-//			send(client_socket, serializedParticle.c_str(), serializedParticle.size(), 0);
-//		}
-//        // sleep for 5 ms
-//        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-//	}
-//}
-
 void sendPositionThread(SOCKET client_socket, std::vector<Particle>& particles) {
     while (true) {
         std::unique_lock<std::mutex> lock(mtx);
         cv.wait(lock, [] { return readyToRender; });
 
+        std::stringstream ss;
         for (auto& particle : particles) {
-            std::string serializedParticle = particle.serialize() + "\n"; // Adding a newline as a delimiter
-            int totalSent = 0;
-            while (totalSent < serializedParticle.length()) {
-                int sent = send(client_socket, serializedParticle.c_str() + totalSent, serializedParticle.length() - totalSent, 0);
-                if (sent == SOCKET_ERROR) {
-                    // Handle error, e.g., break the loop or close socket
-                    break;
-                }
-                totalSent += sent;
-            }
+            ss << particle.serialize() << "\n"; // Adding a newline as a delimiter
         }
 
-        //std::this_thread::sleep_for(std::chrono::milliseconds(5)); // Small delay to prevent tight loop in case of error
+        std::string serializedParticles = ss.str();
+        int totalSent = 0;
+        while (totalSent < serializedParticles.length()) {
+            int sent = send(client_socket, serializedParticles.c_str() + totalSent, serializedParticles.length() - totalSent, 0);
+            if (sent == SOCKET_ERROR) {
+                // Handle error, e.g., break the loop or close socket
+                break;
+            }
+            totalSent += sent;
+        }
     }
 }
 

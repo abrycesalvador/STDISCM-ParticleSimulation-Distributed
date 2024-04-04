@@ -64,12 +64,18 @@ void receiveParticleData(SOCKET client_socket, std::map<int, sf::CircleShape>& p
         bytesReceived = recv(client_socket, buffer, MAX_BUFFER_SIZE - 1, 0);
         if (bytesReceived > 0) {
             buffer[bytesReceived] = '\0';
-            Particle particle = Particle::deserialize(std::move(buffer));
-            sf::CircleShape particleShape(1);
-            particleShape.setOrigin(particleShape.getRadius(), particleShape.getRadius());
-            particleShape.setPosition(particle.getPosX(), particle.getPosY());
-            //std::cout << particle.getId() << std::endl;
-            particleShapes[particle.getId()] = std::move(particleShape);
+            std::string receivedData(buffer);
+            std::istringstream iss(receivedData);
+            std::string line;
+            while (std::getline(iss, line)) {
+                if (!line.empty()) {
+                    Particle particle = Particle::deserialize(line);
+                    sf::CircleShape particleShape(1);
+                    particleShape.setOrigin(particleShape.getRadius(), particleShape.getRadius());
+                    particleShape.setPosition(particle.getPosX(), particle.getPosY());
+                    particleShapes[particle.getId()] = std::move(particleShape);
+                }
+            }
             readyToRender = true;
             cv.notify_one();
         }
@@ -84,6 +90,7 @@ void receiveParticleData(SOCKET client_socket, std::map<int, sf::CircleShape>& p
         }
     }
 }
+
 
 void keyboardInputListener() {
     while (true) {
