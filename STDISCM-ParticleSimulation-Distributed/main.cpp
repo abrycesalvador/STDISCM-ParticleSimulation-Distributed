@@ -242,18 +242,6 @@ int main(){
 
     std::cout << "Server is listening..." << std::endl;
 
-    /*SOCKET client_socket;
-    sockaddr_in client_address;
-    int client_address_size = sizeof(client_address);
-    client_socket = accept(server_socket, reinterpret_cast<SOCKADDR*>(&client_address), &client_address_size);
-    if (client_socket == INVALID_SOCKET) {
-        std::cerr << "Error accepting connection" << std::endl;
-        closesocket(server_socket);
-        WSACleanup();
-        return 1;
-    }
-
-    std::cout << "Client connected" << std::endl;*/
     std::vector<Particle> particles;
     std::vector<sf::CircleShape> particleShapes;
     int particleCount = 0;
@@ -282,32 +270,13 @@ int main(){
     fpsText.setStyle(sf::Text::Bold | sf::Text::Underlined);
 
 
-
-    
-
-
-    /*
-    // SAMPLE PARTICLES
-    for (int i = 0; i < numInitParticles; i++) {
-		//particles.push_back(Particle(i, 100, 100, i, 5));
-        particles.push_back(Particle(i, rand() % 1280, rand() % 720, rand() % 360, 5));
-		particleShapes.push_back(sf::CircleShape(4, 10));
-		particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
-		particleShapes.at(i).setFillColor(sf::Color::Red);
-		particleCount++;
-	}*/
-
 	std::vector<std::thread> threads;
 
 	for (int i = 0; i < numThreads; ++i) {
 		threads.emplace_back(updateParticles, std::ref(particles), std::ref(particleShapes));
 	}
 
-    //std::thread keyboardThread(keyboardInputListener);
-
     sf::Clock deltaClock;
-
-    //std::thread receivePositionThread(receivePosition, client_socket);
 
     // Load textures
     if (!textures[0].loadFromFile("red.png")) {
@@ -382,7 +351,6 @@ int main(){
                 particles.push_back(Particle(particleCount, startX + interval * i, startY + interval * i, angle, speed));
                 particleShapes.push_back(sf::CircleShape(1, 10));
                 particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
-                //particleShapes.at(i).setFillColor(sf::Color::Red);
                 particleCount++;
             }
 
@@ -418,7 +386,6 @@ int main(){
                 particles.push_back(Particle(particleCount, startX2, startY2, angleStart + (interval * i), speed2));
                 particleShapes.push_back(sf::CircleShape(1, 10));
                 particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
-                //particleShapes.at(i).setFillColor(sf::Color::Red);
                 particleCount++;
             }
 
@@ -460,7 +427,6 @@ int main(){
                 particles.push_back(Particle(particleCount, startX3, startY3, angle3, speedStart + (interval * i)));
                 particleShapes.push_back(sf::CircleShape(1, 10));
                 particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
-                //particleShapes.at(i).setFillColor(sf::Color::Red);
                 particleCount++;
             }
 
@@ -472,7 +438,6 @@ int main(){
             particleCount = 0;
             particles.clear();
             particleShapes.clear();
-            //clear array of balls
         }
 
         ImGui::End();
