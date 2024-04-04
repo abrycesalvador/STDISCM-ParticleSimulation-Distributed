@@ -25,32 +25,33 @@ std::mutex mtx;
 std::condition_variable cv;
 bool readyToRender = false;
 bool readyToCompute = true;
-const int numThreads = std::thread::hardware_concurrency();
-int currentParticle = 0;
+
+std::pair<float, float> last_position = std::make_pair(0, 0);
 
 sf::View explorerView(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 19));
 void moveExplorer(float moveX, float moveY);
 
 void sendLocation(SOCKET client_socket, sf::View& explorer) {
     while (true) {
+        sf::Vector2 vec_position = explorer.getCenter();
+        std::pair<float, float> position = std::make_pair(vec_position.x, vec_position.y);
+        // Don't send position if it hasn't changed
+        if (last_position == position) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+			continue;
+		}
+        last_position = position;
+        //std::cout << "Sending position: " << position.first << ", " << position.second << std::endl;
 
-        sf::Vector2 position = explorer.getCenter();
+        std::ostringstream oss;
+        oss << "(0, " << position.first << ", " << position.second << ")";
+        std::string sendString = oss.str();
 
-        std::string sendString = "(0, " + std::to_string(position.x) + ", " + std::to_string(position.y) + ")";
-
-        int bytes_sent = send(client_socket, sendString.c_str(), sendString.size(), 0);
-
-        //std::cout << "Sent: " << bytes_sent << std::endl;
-        
+        int bytes_sent = send(client_socket, sendString.c_str(), sendString.size(), 0);        
         if (bytes_sent == SOCKET_ERROR) {
             std::cerr << "Error sending data to server" << std::endl;
-            closesocket(client_socket);
-            WSACleanup();
             break;
         }
-
-        // send this thread every X seconds
-        //std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
 }
 
@@ -103,24 +104,6 @@ void keyboardInputListener() {
         }
     }
 }
-
-
-void updateParticles(std::vector<Particle>& particles, std::vector<sf::CircleShape>& particleShapes) {
-    while (true){
-        {
-            std::unique_lock lk(mtx);
-            cv.wait(lk, [&particles] { return readyToCompute && particles.size() > 0; });
-            particleShapes.at(currentParticle).setPosition(particles.at(currentParticle).getPosX(), particles.at(currentParticle).getPosY());
-            currentParticle++;
-            if (currentParticle > particles.size() - 1) {
-                readyToRender = true;
-                readyToCompute = false;
-                cv.notify_one();
-            }
-        }      
-    }    
-}
-
 
 void moveExplorer(float moveX, float moveY) {
     sf::Vector2f currentCenter = explorerView.getCenter();
@@ -265,7 +248,6 @@ int main()
             }
             readyToCompute = true;
             readyToRender = false;
-            currentParticle = 0;
             cv.notify_all();
             lock.unlock();
         }
