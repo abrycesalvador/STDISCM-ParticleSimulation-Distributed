@@ -20,6 +20,7 @@
 #pragma comment(lib, "ws2_32.lib")
 
 #define SERVER_IP "127.0.0.1"
+#define MAX_BUFFER_SIZE 4096
 
 std::mutex mtx;
 std::condition_variable cv;
@@ -56,21 +57,13 @@ void sendLocation(SOCKET client_socket, sf::View& explorer) {
 }
 
 void receiveParticleData(SOCKET client_socket, std::map<int, sf::CircleShape>& particleShapes) {
+    int bytesReceived;
+    char buffer[MAX_BUFFER_SIZE];
     while (true) {
-        std::string buffer(4096, '\0');
-        int bytes_received = recv(client_socket, &buffer[0], buffer.size(), 0);
-        std::cout << bytes_received << std::endl;
-        if (bytes_received == SOCKET_ERROR) {
-            std::cerr << "Error receiving data from server" << std::endl;
-            break;
-        }
-        else if (bytes_received == 0) {
-            std::cout << "Connection closed by server" << std::endl;
-            break;
-        }
-        else {
-            buffer.resize(bytes_received);
-            //std::cout << buffer << std::endl;
+        memset(buffer, 0, MAX_BUFFER_SIZE);
+        bytesReceived = recv(client_socket, buffer, MAX_BUFFER_SIZE - 1, 0);
+        if (bytesReceived > 0) {
+            buffer[bytesReceived] = '\0';
             Particle particle = Particle::deserialize(std::move(buffer));
             sf::CircleShape particleShape(1);
             particleShape.setOrigin(particleShape.getRadius(), particleShape.getRadius());
@@ -79,6 +72,15 @@ void receiveParticleData(SOCKET client_socket, std::map<int, sf::CircleShape>& p
             particleShapes[particle.getId()] = std::move(particleShape);
             readyToRender = true;
             cv.notify_one();
+        }
+        else if (bytesReceived == 0) {
+            std::cout << "Connection closed by the server." << std::endl;
+            break;
+        }
+        else {
+            std::cerr << "Receive failed with error code: " << WSAGetLastError() << std::endl;
+            closesocket(client_socket);
+            break;
         }
     }
 }
