@@ -76,11 +76,12 @@ public:
 	}
 
 	static Particle deserialize(const std::string& str) {
-		std::stringstream ss(str);
+		//std::stringstream ss(str);
 		int id;
-		float posX, posY, angle, speed;
-		char c;
-		ss >> c >> id >> c >> posX >> c >> posY >> c;
+		float posX, posY;
+		//char c;
+		sscanf_s(str.c_str(), "(%d,%f,%f)", &id, &posX, &posY);
+		//ss >> c >> id >> c >> posX >> c >> posY >> c;
 
 
 		return Particle(id, posX, posY);

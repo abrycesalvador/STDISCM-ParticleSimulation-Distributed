@@ -61,6 +61,7 @@ void receiveParticleData(SOCKET client_socket, std::map<int, sf::CircleShape>& p
     while (true) {
         std::string buffer(4096, '\0');
         int bytes_received = recv(client_socket, &buffer[0], buffer.size(), 0);
+        std::cout << bytes_received << std::endl;
         if (bytes_received == SOCKET_ERROR) {
             std::cerr << "Error receiving data from server" << std::endl;
             break;
@@ -71,7 +72,7 @@ void receiveParticleData(SOCKET client_socket, std::map<int, sf::CircleShape>& p
         }
         else {
             buffer.resize(bytes_received);
-            std::cout << buffer << std::endl;
+            //std::cout << buffer << std::endl;
             Particle particle = Particle::deserialize(std::move(buffer));
             sf::CircleShape particleShape(1);
             particleShape.setOrigin(particleShape.getRadius(), particleShape.getRadius());
@@ -226,7 +227,7 @@ int main()
     // Main loop
     while (mainWindow.isOpen())
     {
-        //std::cout << particleShapes.size() << std::endl;
+        std::cout << particleShapes.size() << std::endl;
         auto currentFPSTime = std::chrono::steady_clock::now();
         auto elapsedFPSTime = std::chrono::duration_cast<std::chrono::milliseconds>(currentFPSTime - lastFPSDrawTime);
 
