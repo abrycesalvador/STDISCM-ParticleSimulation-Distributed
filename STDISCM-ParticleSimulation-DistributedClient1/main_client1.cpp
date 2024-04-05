@@ -21,6 +21,7 @@
 
 #define SERVER_IP "127.0.0.1"
 #define MAX_BUFFER_SIZE 4096
+#define CLIENT_ID 1
 
 std::mutex mtx;
 std::condition_variable cv;
@@ -45,7 +46,7 @@ void sendLocation(SOCKET client_socket, sf::View& explorer) {
         //std::cout << "Sending position: " << position.first << ", " << position.second << std::endl;
 
         std::ostringstream oss;
-        oss << "(0, " << position.first << ", " << position.second << ")";
+        oss << "(" << CLIENT_ID << ", " << position.first << ", " << position.second << ")";
         std::string sendString = oss.str();
 
         int bytes_sent = send(client_socket, sendString.c_str(), sendString.size(), 0);        
