@@ -45,11 +45,9 @@ void sendLocation(SOCKET client_socket, sf::View& explorer) {
         std::pair<float, float> position = std::make_pair(vec_position.x, vec_position.y);
         // Don't send position if it hasn't changed
         if (last_position == position) {
-			std::this_thread::sleep_for(std::chrono::milliseconds(50));
 			continue;
 		}
         last_position = position;
-        //std::cout << "Sending position: " << position.first << ", " << position.second << std::endl;
 
         std::ostringstream oss;
         oss << "(" << CLIENT_ID << ", " << position.first << ", " << position.second << ")";
@@ -81,7 +79,6 @@ void receiveParticleData(SOCKET client_socket, std::map<int, sf::CircleShape>& p
                         int spriteId = abs(particle.getId()) - 1;
                         if (spriteId != CLIENT_ID)
                         {
-                            std::cout << "Received Client ID: " << particle.getId() << " at position: " << particle.getPosX() << ", " << particle.getPosY() << std::endl;
 
                             sf::Sprite sprite;
                             sprite.setTexture(textures[spriteId]);

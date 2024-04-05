@@ -25,6 +25,7 @@
 
 std::mutex mtx;
 std::mutex particleShapes_mtx;
+std::mutex spritePos_mtx;
 std::condition_variable cv;
 bool readyToRender = false;
 bool readyToCompute = true;
@@ -41,11 +42,12 @@ sf::View explorerViews[3] = { sf::View(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 
                              sf::View(sf::FloatRect(800 - 9.5, 600 - 16.5, 33, 19)) }; //client 3
 
 bool activeClients[3] = { false, false, false };
-clock_t activeClientsTime[3] = { 0, 0, 0 };
+//clock_t activeClientsTime[3] = { 0, 0, 0 };
 const clock_t TIMEOUT = 2 * CLOCKS_PER_SEC; // 2 seconds
 
 std::vector<int> clientSocketIDs = { -1, -1, -1 };
 std::vector<sf::Vector2f> last_positions = { sf::Vector2f(0, 0), sf::Vector2f(0, 0), sf::Vector2f(0, 0) };
+std::vector<sf::Vector2f> lastSentPositions = { sf::Vector2f(0, 0), sf::Vector2f(0, 0), sf::Vector2f(0, 0) };
 
 sf::Sprite sprites[3];
 sf::Texture textures[3];
@@ -62,21 +64,28 @@ void receivePosition(SOCKET client_socket) {
         //std::cout << "Client: " << client_socket << std::endl;
         if (bytesReceived > 0) {
             buffer[bytesReceived] = '\0';
-            //std::cout << "Received: " << buffer << std::endl;
+
 
             // Parse the received data directly from the buffer
             int client_num;
             float x_float;
             float y_float;
             sscanf_s(buffer, "(%d,%f,%f)", &client_num, &x_float, &y_float);
+            //std::cout << "Client ID: " << client_num << " | X: " << x_float << " | Y: " << y_float << std::endl;
 
             if (client_num >= 0 && client_num < 3) {
                 activeClients[client_num] = true;
                 explorerViews[client_num].setCenter(x_float, y_float);
+                spritePos_mtx.lock();
                 sprites[client_num].setPosition(x_float, y_float);
-                activeClientsTime[client_num] = clock();
+                spritePos_mtx.unlock();
                 clientSocketIDs[client_num] = client_socket;
+                sf::Vector2f clientPos = sprites[client_num].getPosition();
+                //std::cout << "X: " << clientPos.x << " | Y: " << clientPos.y << std::endl;
+                last_positions[client_num] = clientPos;
+                //std::cout << "last_positiions = " << "Client ID: " << client_num << " | X: " << last_positions[client_num].x << " | Y : " << last_positions[client_num].y << std::endl;
             }
+
         }
         else if (bytesReceived == 0) {
             std::cout << "Connection closed by the client." << std::endl;
@@ -89,9 +98,9 @@ void receivePosition(SOCKET client_socket) {
                 if (clientSocketIDs[i] == client_socket) {
                     clientSocketIDs[i] = -1;
                     activeClients[i] = false;
-					break;
-				}
-			}
+                    break;
+                }
+            }
             break;
         }
     }
@@ -99,30 +108,24 @@ void receivePosition(SOCKET client_socket) {
 
 void sendSpritePositionsThread(SOCKET client_socket) {
     while (true) {
-		std::stringstream ss;
+        std::string serializedClients;
         for (int i = 0; i < 3; i++) {
             if (activeClients[i]) {
-				sf::Vector2f clientPos = sprites[i].getPosition();
-                if (last_positions[i] == clientPos) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                    continue;
+                sf::Vector2f clientPos = sprites[i].getPosition();
+                if (clientPos != lastSentPositions[i]) {
+                    serializedClients += "(" + std::to_string((i + 1) * -1) + "," + std::to_string(clientPos.x) + "," + std::to_string(clientPos.y) + ")\n";
+                    lastSentPositions[i] = clientPos;
                 }
-                last_positions[i] = clientPos;
-				ss << "(" << (i + 1) * -1 << "," << clientPos.x << "," << clientPos.y << ")\n";
-			}
-		}
-		std::string serializedClients = ss.str();
-        std::cout << serializedClients << std::endl;
-		int totalSent = 0;
-        while (totalSent < serializedClients.length()) {
-			int sent = send(client_socket, serializedClients.c_str() + totalSent, serializedClients.length() - totalSent, 0);
+            }
+        }
+        if (!serializedClients.empty()) {
+            int sent = send(client_socket, serializedClients.c_str(), serializedClients.length(), 0);
             if (sent == SOCKET_ERROR) {
-				// Handle error, e.g., break the loop or close socket
-				break;
-			}
-			totalSent += sent;
-		}
-	}
+                // Handle error, e.g., break the loop or close socket
+                break;
+            }
+        }
+    }
 }
 
 void sendPositionThread(SOCKET client_socket, std::vector<Particle>& particles) {
@@ -471,7 +474,7 @@ int main(){
                 sprites[i].setTexture(textures[i]);
                 sprites[i].setTextureRect(sf::IntRect(0, 0, 3, 3));
                 sprites[i].setOrigin(sprites[i].getLocalBounds().width / 2, sprites[i].getLocalBounds().height / 2);
-                sprites[i].setPosition(explorerViews[i].getCenter());
+                //sprites[i].setPosition(explorerViews[i].getCenter());
                 rectShapes[i].setSize(sf::Vector2f(33, 19));
                 rectShapes[i].setFillColor(sf::Color::Transparent);
                 rectShapes[i].setOutlineColor(sf::Color::White);
