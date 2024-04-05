@@ -45,7 +45,7 @@ clock_t activeClientsTime[3] = { 0, 0, 0 };
 const clock_t TIMEOUT = 2 * CLOCKS_PER_SEC; // 2 seconds
 
 std::vector<int> clientSocketIDs = { -1, -1, -1 };
-std::vector<std::pair<float, float>> last_positions = { std::make_pair(0, 0) };
+std::vector<sf::Vector2f> last_positions = { sf::Vector2f(0, 0), sf::Vector2f(0, 0), sf::Vector2f(0, 0) };
 
 sf::Sprite sprites[3];
 sf::Texture textures[3];
@@ -103,6 +103,11 @@ void sendSpritePositionsThread(SOCKET client_socket) {
         for (int i = 0; i < 3; i++) {
             if (activeClients[i]) {
 				sf::Vector2f clientPos = sprites[i].getPosition();
+                if (last_positions[i] == clientPos) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                    continue;
+                }
+                last_positions[i] = clientPos;
 				ss << "(" << (i + 1) * -1 << "," << clientPos.x << "," << clientPos.y << ")\n";
 			}
 		}

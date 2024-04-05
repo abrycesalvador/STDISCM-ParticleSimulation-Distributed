@@ -28,7 +28,13 @@ std::condition_variable cv;
 bool readyToRender = false;
 bool readyToCompute = true;
 
+sf::Sprite sprites[3];
+sf::Texture textures[3];
+
 std::pair<float, float> last_position = std::make_pair(0, 0);
+
+bool activeClients[3] = { false, false, false };
+std::vector<std::pair<float, float>> sprite_positions = { std::make_pair(-1, -1), std::make_pair(-1, -1) , std::make_pair(-1, -1) };
 
 sf::View explorerView(sf::FloatRect(100 - 9.5, 200 - 16.5, 33, 19));
 void moveExplorer(float moveX, float moveY);
@@ -71,10 +77,28 @@ void receiveParticleData(SOCKET client_socket, std::map<int, sf::CircleShape>& p
             while (std::getline(iss, line)) {
                 if (!line.empty()) {
                     Particle particle = Particle::deserialize(line);
-                    sf::CircleShape particleShape(1);
-                    particleShape.setOrigin(particleShape.getRadius(), particleShape.getRadius());
-                    particleShape.setPosition(particle.getPosX(), particle.getPosY());
-                    particleShapes[particle.getId()] = std::move(particleShape);
+                    if (particle.getId() < 0) {
+                        int spriteId = abs(particle.getId()) - 1;
+                        if (spriteId != CLIENT_ID)
+                        {
+                            std::cout << "Received Client ID: " << particle.getId() << " at position: " << particle.getPosX() << ", " << particle.getPosY() << std::endl;
+
+                            sf::Sprite sprite;
+                            sprite.setTexture(textures[spriteId]);
+                            sprite.setTextureRect(sf::IntRect(0, 0, 3, 3));
+                            sprite.setOrigin(sprites[spriteId].getLocalBounds().width / 2, sprites[spriteId].getLocalBounds().height / 2);
+                            sprite.setPosition(particle.getPosX(), particle.getPosY());
+                            sprites[spriteId] = std::move(sprite);
+                            activeClients[spriteId] = true;
+                        }
+                    }
+                    else
+                    {
+                        sf::CircleShape particleShape(1);
+                        particleShape.setOrigin(particleShape.getRadius(), particleShape.getRadius());
+                        particleShape.setPosition(particle.getPosX(), particle.getPosY());
+                        particleShapes[particle.getId()] = std::move(particleShape);
+                    }
                 }
             }
             readyToRender = true;
@@ -216,6 +240,20 @@ int main()
         ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoSavedSettings;
 
+    // Load textures
+    if (!textures[0].loadFromFile("red.png")) {
+        // handle error
+        return -1;
+    }
+    if (!textures[1].loadFromFile("green.png")) {
+        // handle error
+        return -1;
+    }
+    if (!textures[2].loadFromFile("blue.png")) {
+        // handle error
+        return -1;
+    }
+
     // Main GUI loop
     while (mainWindow.isOpen())
     {
@@ -263,6 +301,12 @@ int main()
         }
 
         mainWindow.draw(sprite);
+
+        for (int i = 0; i < 3; ++i) {
+            if (activeClients[i] && i != 1) {
+                mainWindow.draw(sprites[i]);
+            }
+        }
 
         // Update the FPS counter
         fps.update();
