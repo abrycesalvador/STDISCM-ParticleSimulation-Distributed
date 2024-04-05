@@ -1,5 +1,3 @@
-// TODO: Fix issue with client sprites disappearing after not moving for a while
-
 #include <SFML/Graphics.hpp>
 #include <iostream>
 #include <math.h>
@@ -11,6 +9,8 @@
 #include <ws2tcpip.h>
 #include <sstream>
 #include <string>
+#include <tuple>
+#include <iostream>
 
 #include "Particle.h"
 #include "FPS.cpp"
@@ -20,7 +20,7 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-#define SERVER_IP "192.168.183.93"
+#define SERVER_IP "127.0.0.1"
 #define MAX_BUFFER_SIZE 4096
 
 std::mutex mtx;
@@ -44,6 +44,8 @@ bool activeClients[3] = { false, false, false };
 clock_t activeClientsTime[3] = { 0, 0, 0 };
 const clock_t TIMEOUT = 2 * CLOCKS_PER_SEC; // 2 seconds
 
+std::vector<int> clientSocketIDs = { -1, -1, -1 };
+
 sf::Sprite sprites[3];
 sf::Texture textures[3];
 
@@ -56,6 +58,7 @@ void receivePosition(SOCKET client_socket) {
     while (true) {
         memset(buffer, 0, MAX_BUFFER_SIZE);
         bytesReceived = recv(client_socket, buffer, MAX_BUFFER_SIZE - 1, 0);
+        //std::cout << "Client: " << client_socket << std::endl;
         if (bytesReceived > 0) {
             buffer[bytesReceived] = '\0';
             //std::cout << "Received: " << buffer << std::endl;
@@ -70,6 +73,7 @@ void receivePosition(SOCKET client_socket) {
                 activeClients[client_num] = true;
                 explorerViews[client_num].setCenter(x_float, y_float);
                 activeClientsTime[client_num] = clock();
+                clientSocketIDs[client_num] = client_socket;
             }
         }
         else if (bytesReceived == 0) {
@@ -78,6 +82,14 @@ void receivePosition(SOCKET client_socket) {
         }
         else {
             std::cerr << "Receive failed with error code: " << WSAGetLastError() << std::endl;
+            // find client_socket in clientSocketIDs and set it to -1
+            for (int i = 0; i < 3; i++) {
+                if (clientSocketIDs[i] == client_socket) {
+                    clientSocketIDs[i] = -1;
+                    activeClients[i] = false;
+					break;
+				}
+			}
             break;
         }
     }
@@ -126,24 +138,6 @@ void acceptClients(SOCKET server_socket, std::vector<Particle>& particles) {
         std::thread(sendPositionThread, client_socket, std::ref(particles)).detach();
     }
 
-}
-
-void clearClients() {
-    int i = 0;
-
-    while(true) {
-        
-        if (activeClients[i] && clock() - activeClientsTime[i] > TIMEOUT) {
-            activeClients[i] = false;
-        }
-
-        if (i == 2) {
-			i = 0;
-		}
-        else {
-			i++;
-		}
-    }
 }
 
 void updateParticles(std::vector<Particle>& particles, std::vector<sf::CircleShape>& particleShapes) {
@@ -224,7 +218,7 @@ int main(){
     int particleCount = 0;
     
     std::thread acceptClientsThread(acceptClients, server_socket, std::ref(particles));
-    std::thread clearClientsThread(clearClients);
+    //std::thread clearClientsThread(clearClients);
 
     // Create the main window
     sf::RenderWindow mainWindow(sf::VideoMode(1280, 720), "Particle Simulator");
