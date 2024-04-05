@@ -20,7 +20,7 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-#define SERVER_IP "127.0.0.1"
+#define SERVER_IP "192.168.183.93"
 #define MAX_BUFFER_SIZE 4096
 
 std::mutex mtx;
@@ -32,8 +32,6 @@ const int numThreads = std::thread::hardware_concurrency();
 int currentParticle = 0;
 
 std::vector<std::thread> clientThreads;
-std::mutex clientCountMutex;
-int clientCount = 0;
 const int MAX_CLIENTS = 3;
 
 sf::View explorerView(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 19));
@@ -80,13 +78,6 @@ void receivePosition(SOCKET client_socket) {
         }
         else {
             std::cerr << "Receive failed with error code: " << WSAGetLastError() << std::endl;
-            closesocket(client_socket);
-
-            {
-                std::lock_guard<std::mutex> lock(clientCountMutex);
-                clientCount--;
-            }
-
             break;
         }
     }
@@ -119,15 +110,6 @@ void sendPositionThread(SOCKET client_socket, std::vector<Particle>& particles) 
 
 void acceptClients(SOCKET server_socket, std::vector<Particle>& particles) {
     while (true) {
-        {
-            std::lock_guard<std::mutex> lock(clientCountMutex);
-            if (clientCount >= MAX_CLIENTS) {
-                std::cerr << "Maximum number of clients reached. Rejecting new connections." << std::endl;
-                break;
-            }
-        }
-
-
         SOCKET client_socket;
         sockaddr_in client_address;
         int client_address_size = sizeof(client_address);
@@ -142,11 +124,6 @@ void acceptClients(SOCKET server_socket, std::vector<Particle>& particles) {
         // Start a new thread to handle communication with the client
         std::thread(receivePosition, client_socket).detach();
         std::thread(sendPositionThread, client_socket, std::ref(particles)).detach();
-
-        {
-            std::lock_guard<std::mutex> lock(clientCountMutex);
-            clientCount++;
-        }
     }
 
 }
