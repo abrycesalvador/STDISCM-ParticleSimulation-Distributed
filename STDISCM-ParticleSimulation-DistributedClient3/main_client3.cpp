@@ -30,7 +30,7 @@ bool readyToCompute = true;
 
 std::pair<float, float> last_position = std::make_pair(0, 0);
 
-sf::View explorerView(sf::FloatRect(640 - 9.5, 360 - 16.5, 33, 19));
+sf::View explorerView(sf::FloatRect(800 - 9.5, 600 - 16.5, 33, 19));
 void moveExplorer(float moveX, float moveY);
 
 void sendLocation(SOCKET client_socket, sf::View& explorer) {
