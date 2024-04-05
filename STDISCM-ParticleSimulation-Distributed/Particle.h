@@ -2,6 +2,7 @@
 #include <iostream>
 #include <SFML/Graphics.hpp>
 #include "cmath"
+#include <sstream>
 
 #define PI 3.14159265358979323846
 
@@ -18,6 +19,15 @@ public:
 		//std::cout << "ID: " << this->id << " | speed: " << this->speed << std::endl;
 
 		setParticleVector();
+	}
+
+	Particle(int id, float posX, float posY) {
+		this->particleVector = { 0, 0 };
+		this->id = id;
+		this->posX = posX;
+		this->posY = posY;
+		this->angle = 0;
+		this->speed = 0;
 	}
 
 private:
@@ -47,11 +57,33 @@ public:
 			particleVector.at(1) = -particleVector.at(1);
 	}
 
+	int getId() {
+		return id;
+	}
+
 	float getPosX() {
 		return posX;
 	}
 
 	float getPosY() {
 		return posY;
+	}
+
+	std::string serialize() {
+		std::stringstream ss;
+		ss << "(" << id << "," << posX << "," << posY << ")";
+		return ss.str();
+	}
+
+	static Particle deserialize(const std::string& str) {
+		//std::stringstream ss(str);
+		int id;
+		float posX, posY;
+		//char c;
+		sscanf_s(str.c_str(), "(%d,%f,%f)", &id, &posX, &posY);
+		//ss >> c >> id >> c >> posX >> c >> posY >> c;
+
+
+		return Particle(id, posX, posY);
 	}
 };

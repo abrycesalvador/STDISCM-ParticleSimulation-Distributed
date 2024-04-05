@@ -7,108 +7,137 @@
 #include <mutex>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <map>
 
 
-#include "Particle.h"
+//#include "Particle.h"
 #include "FPS.cpp"
 
 #include "imgui/imgui.h"
 #include "imgui/imgui-SFML.h"
+#include "../STDISCM-ParticleSimulation-Distributed/Particle.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
 #define SERVER_IP "127.0.0.1"
+#define MAX_BUFFER_SIZE 4096
+#define CLIENT_ID 2
 
 std::mutex mtx;
 std::condition_variable cv;
 bool readyToRender = false;
 bool readyToCompute = true;
-const int numThreads = std::thread::hardware_concurrency();
-int currentParticle = 0;
-int mode = 1; // 0 - Dev; 1 - Explorer
+
+sf::Sprite sprites[3];
+sf::Texture textures[3];
+
+std::pair<float, float> last_position = std::make_pair(0, 0);
+
+bool activeClients[3] = { false, false, false };
+std::vector<std::pair<float, float>> sprite_positions = { std::make_pair(-1, -1), std::make_pair(-1, -1) , std::make_pair(-1, -1) };
 
 sf::View explorerView(sf::FloatRect(800 - 9.5, 600 - 16.5, 33, 19));
-
-std::atomic<bool> quitKeyPressed(false);
 void moveExplorer(float moveX, float moveY);
 
 void sendLocation(SOCKET client_socket, sf::View& explorer) {
     while (true) {
+        sf::Vector2 vec_position = explorer.getCenter();
+        std::pair<float, float> position = std::make_pair(vec_position.x, vec_position.y);
+        // Don't send position if it hasn't changed
+        if (last_position == position) {
+            //std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            continue;
+        }
+        last_position = position;
+        //std::cout << "Sending position: " << position.first << ", " << position.second << std::endl;
 
-        sf::Vector2 position = explorer.getCenter();
-
-        std::string sendString = "(2, " + std::to_string(position.x) + ", " + std::to_string(position.y) + ")";
+        std::ostringstream oss;
+        oss << "(" << CLIENT_ID << ", " << position.first << ", " << position.second << ")";
+        std::string sendString = oss.str();
 
         int bytes_sent = send(client_socket, sendString.c_str(), sendString.size(), 0);
-        std::cout << "Sent: " << bytes_sent << std::endl;
         if (bytes_sent == SOCKET_ERROR) {
             std::cerr << "Error sending data to server" << std::endl;
-            closesocket(client_socket);
-            WSACleanup();
             break;
         }
+    }
+}
 
-        // send this thread every X seconds
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+void receiveParticleData(SOCKET client_socket, std::map<int, sf::CircleShape>& particleShapes) {
+    int bytesReceived;
+    char buffer[MAX_BUFFER_SIZE];
+    while (true) {
+        memset(buffer, 0, MAX_BUFFER_SIZE);
+        bytesReceived = recv(client_socket, buffer, MAX_BUFFER_SIZE - 1, 0);
+        if (bytesReceived > 0) {
+            buffer[bytesReceived] = '\0';
+            std::string receivedData(buffer);
+            std::istringstream iss(receivedData);
+            std::string line;
+            while (std::getline(iss, line)) {
+                if (!line.empty()) {
+                    Particle particle = Particle::deserialize(line);
+                    if (particle.getId() < 0) {
+                        int spriteId = abs(particle.getId()) - 1;
+                        if (spriteId != CLIENT_ID)
+                        {
+                            /*std::cout << "Received Client ID: " << particle.getId() << " at position: " << particle.getPosX() << ", " << particle.getPosY() << std::endl;*/
+
+                            sf::Sprite sprite;
+                            sprite.setTexture(textures[spriteId]);
+                            sprite.setTextureRect(sf::IntRect(0, 0, 3, 3));
+                            sprite.setOrigin(sprites[spriteId].getLocalBounds().width / 2, sprites[spriteId].getLocalBounds().height / 2);
+                            sprite.setPosition(particle.getPosX(), particle.getPosY());
+                            sprites[spriteId] = std::move(sprite);
+                            activeClients[spriteId] = true;
+                        }
+                    }
+                    else
+                    {
+                        sf::CircleShape particleShape(1);
+                        particleShape.setOrigin(particleShape.getRadius(), particleShape.getRadius());
+                        particleShape.setPosition(particle.getPosX(), particle.getPosY());
+                        particleShapes[particle.getId()] = std::move(particleShape);
+                    }
+                }
+            }
+            readyToRender = true;
+            cv.notify_one();
+        }
+        else if (bytesReceived == 0) {
+            std::cout << "Connection closed by the server." << std::endl;
+            break;
+        }
+        else {
+            std::cerr << "Receive failed with error code: " << WSAGetLastError() << std::endl;
+            closesocket(client_socket);
+            break;
+        }
     }
 }
 
 
 void keyboardInputListener() {
-    while (!quitKeyPressed) {
-        float moveX = 5, moveY = 2.5;   // Change values for how distance explorer moves.
-
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q)) {
-            mode = (mode == 0) ? 1 : 0;
-            std::cout << "Mode switched to: " << mode << std::endl;
-
-            if (mode) {
-                std::cout << "Last logged explorer X: " << explorerView.getCenter().x << std::endl;
-                std::cout << "Last logged explorer Y: " << explorerView.getCenter().y << std::endl << std::endl;
-            }//
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(200)); // Debounce time to avoid rapid mode switching
-
-        }
-        if (mode && (sf::Keyboard::isKeyPressed(sf::Keyboard::W) || sf::Keyboard::isKeyPressed(sf::Keyboard::Up))) {
+    while (true) {
+        float moveX = 5, moveY = 5;   // Change values for how distance explorer moves.
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::W) || sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) {
             moveExplorer(0, -moveY);
             std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Debounce time to avoid rapid movement
         }
-        if (mode && (sf::Keyboard::isKeyPressed(sf::Keyboard::A) || sf::Keyboard::isKeyPressed(sf::Keyboard::Left))) {
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::A) || sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
             moveExplorer(-moveX, 0);
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
-        if (mode && (sf::Keyboard::isKeyPressed(sf::Keyboard::S) || sf::Keyboard::isKeyPressed(sf::Keyboard::Down))) {
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::S) || sf::Keyboard::isKeyPressed(sf::Keyboard::Down)) {
             moveExplorer(0, moveY);
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
-        if (mode && (sf::Keyboard::isKeyPressed(sf::Keyboard::D) || sf::Keyboard::isKeyPressed(sf::Keyboard::Right))) {
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::D) || sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
             moveExplorer(moveX, 0);
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
-
     }
 }
-
-
-void updateParticles(std::vector<Particle>& particles, std::vector<sf::CircleShape>& particleShapes) {
-    while (true){
-        {
-            std::unique_lock lk(mtx);
-            cv.wait(lk, [&particles] { return readyToCompute && particles.size() > 0; });
-            particles.at(currentParticle).checkCollision();
-            particles.at(currentParticle).updateParticlePosition();
-            particleShapes.at(currentParticle).setPosition(particles.at(currentParticle).getPosX(), particles.at(currentParticle).getPosY());
-            currentParticle++;
-            if (currentParticle > particles.size() - 1) {
-                readyToRender = true;
-                readyToCompute = false;
-                cv.notify_one();
-            }
-        }      
-    }    
-}
-
 
 void moveExplorer(float moveX, float moveY) {
     sf::Vector2f currentCenter = explorerView.getCenter();
@@ -126,8 +155,7 @@ void moveExplorer(float moveX, float moveY) {
     explorerView.setCenter(newCenter);
 }
 
-int main()
-{
+SOCKET initializeSocket() {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         std::cerr << "Error initializing Winsock" << std::endl;
@@ -141,120 +169,117 @@ int main()
         return 1;
     }
 
+    return client_socket;
+}
+
+bool connectToServer(SOCKET client_socket) {
     sockaddr_in server_address;
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(5001); // Port number of the server
     inet_pton(AF_INET, SERVER_IP, &server_address.sin_addr);
 
     if (connect(client_socket, reinterpret_cast<SOCKADDR*>(&server_address), sizeof(server_address)) == SOCKET_ERROR) {
-        std::cerr << "Error connecting to server" << std::endl;
-        closesocket(client_socket);
-        WSACleanup();
-        return 1;
+        std::cerr << "Error connecting to server. Retrying in 5 seconds..." << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        //closesocket(client_socket);
+        //WSACleanup();
+        return false;
     }
 
+
+    return true;
+}
+
+int main()
+{
+    SOCKET client_socket = initializeSocket();
+    bool connected = false;
+    do {
+        connected = connectToServer(client_socket);
+    } while (!connected);
     std::cout << "Connected to server" << std::endl;
 
     // Create the main window
     sf::RenderWindow mainWindow(sf::VideoMode(1280, 720), "Particle Simulator Client 3");
     mainWindow.setFramerateLimit(60);
     ImGui::SFML::Init(mainWindow);
+    sf::Clock deltaClock;
 
+    // Setup FPS
+    FPS fps;
     auto lastFPSDrawTime = std::chrono::steady_clock::now();
     const std::chrono::milliseconds timeInterval(500); // 0.5 seconds
-    FPS fps;
-
     sf::Font font;
     if (!font.loadFromFile("OpenSans-VariableFont_wdth,wght.ttf"))
     {
         std::cout << "error";
     }
-
     sf::Text fpsText;
     fpsText.setFont(font);
     fpsText.setFillColor(sf::Color::Green);
     fpsText.setStyle(sf::Text::Bold | sf::Text::Underlined);
 
-	std::vector<Particle> particles;
-	std::vector<sf::CircleShape> particleShapes;
-    int particleCount = 0;
+    std::map<int, sf::CircleShape> particleShapes;
 
-    
-    /*
-    // SAMPLE PARTICLES
-    for (int i = 0; i < numInitParticles; i++) {
-		//particles.push_back(Particle(i, 100, 100, i, 5));
-        particles.push_back(Particle(i, rand() % 1280, rand() % 720, rand() % 360, 5));
-		particleShapes.push_back(sf::CircleShape(4, 10));
-		particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
-		particleShapes.at(i).setFillColor(sf::Color::Red);
-		particleCount++;
-	}*/
-
-	std::vector<std::thread> threads;
-
-	for (int i = 0; i < numThreads; ++i) {
-		threads.emplace_back(updateParticles, std::ref(particles), std::ref(particleShapes));
-	}
-
+    // Utility threads
+    std::thread receiveParticleDataThread(receiveParticleData, client_socket, std::ref(particleShapes));
     std::thread keyboardThread(keyboardInputListener);
-
     std::thread sendLocationThread(sendLocation, client_socket, std::ref(explorerView));
 
-    sf::Clock deltaClock;
+    sf::Sprite sprite;
+    sf::Texture texture;
+    if (!texture.loadFromFile("blue.png")) {
+        std::cerr << "Error loading texture" << std::endl;
+        return -1;
+    }
+    sprite.setTexture(texture);
+    sprite.setTextureRect(sf::IntRect(0, 0, 3, 3));
+    sprite.setOrigin(sprite.getLocalBounds().width / 2, sprite.getLocalBounds().height / 2);
 
-    // Main loop
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoSavedSettings;
+
+    // Load textures
+    if (!textures[0].loadFromFile("red.png")) {
+        // handle error
+        return -1;
+    }
+    if (!textures[1].loadFromFile("green.png")) {
+        // handle error
+        return -1;
+    }
+    if (!textures[2].loadFromFile("blue.png")) {
+        // handle error
+        return -1;
+    }
+
+    // Main GUI loop
     while (mainWindow.isOpen())
     {
-        auto currentFPSTime = std::chrono::steady_clock::now();
-        auto elapsedFPSTime = std::chrono::duration_cast<std::chrono::milliseconds>(currentFPSTime - lastFPSDrawTime);
-
         // Process events
         sf::Event event;
         while (mainWindow.pollEvent(event))
         {
             ImGui::SFML::ProcessEvent(event);
-            
+
             if (event.type == sf::Event::Closed)
                 mainWindow.close();
         }
-
         ImGui::SFML::Update(mainWindow, deltaClock.restart());
 
-        sf::Sprite sprite;
-        sf::Texture texture;
-        if (!texture.loadFromFile("blue.png")) {
-            // handle error
-            return -1;
-        }
+        const auto currentFPSTime = std::chrono::steady_clock::now();
+        const auto elapsedFPSTime = std::chrono::duration_cast<std::chrono::milliseconds>(currentFPSTime - lastFPSDrawTime);
 
-        sprite.setTexture(texture);
-        sprite.setTextureRect(sf::IntRect(0, 0, 3, 3));
-        sprite.setOrigin(sprite.getLocalBounds().width / 2, sprite.getLocalBounds().height / 2);
         sprite.setPosition(explorerView.getCenter());
-
         mainWindow.setView(explorerView);
 
         fpsText.setString(std::to_string(fps.getFPS()));
         fpsText.setCharacterSize(10);
-
         sf::Vector2f fpsPosition = mainWindow.mapPixelToCoords(sf::Vector2i(10, 10));
         fpsText.setPosition(fpsPosition);
 
-
         mainWindow.draw(fpsText);
-        //code for scaling - if using other images and not a color
-        /*float desiredWidth = 1;
-        float desiredHeight = 1;
-
-        sf::FloatRect spriteBounds = sprite.getLocalBounds();
-        float scaleX = desiredWidth / spriteBounds.width;
-        float scaleY = desiredHeight / spriteBounds.height;
-
-        sprite.setScale(scaleX, scaleY);*/
-
-
-		
 
         // Clear the main window
         mainWindow.clear(sf::Color{ 0, 0, 0, 255 });
@@ -271,35 +296,40 @@ int main()
             }
             readyToCompute = true;
             readyToRender = false;
-            currentParticle = 0;
             cv.notify_all();
             lock.unlock();
         }
 
-        fps.update();
+        mainWindow.draw(sprite);
 
+        for (int i = 0; i < 3; ++i) {
+            if (activeClients[i] && i != 2) {
+                mainWindow.draw(sprites[i]);
+            }
+        }
+
+        // Update the FPS counter
+        fps.update();
         if (elapsedFPSTime >= timeInterval)
         {
             // Update last draw time
             lastFPSDrawTime = currentFPSTime;
 
         }
-        mainWindow.draw(fpsText);
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowBgAlpha(0.25f); // Transparent background
+        ImGui::SetNextWindowSize(ImVec2(75, 10));
+        ImGui::Begin("FPS", nullptr, window_flags);
+        ImGui::Text("FPS: %u", fps.getFPS());
+        ImGui::End();
 
         ImGui::SFML::Render(mainWindow);
 
-        mainWindow.draw(sprite);
-        
         // Display the contents of the main window
         mainWindow.display();
     }
 
-	for (auto& thread : threads) {
-		thread.join();
-	}
-
     ImGui::SFML::Shutdown();
-
     closesocket(client_socket);
     WSACleanup();
 
