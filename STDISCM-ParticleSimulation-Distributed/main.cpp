@@ -45,6 +45,7 @@ clock_t activeClientsTime[3] = { 0, 0, 0 };
 const clock_t TIMEOUT = 2 * CLOCKS_PER_SEC; // 2 seconds
 
 std::vector<int> clientSocketIDs = { -1, -1, -1 };
+std::vector<std::pair<float, float>> last_positions = { std::make_pair(0, 0) };
 
 sf::Sprite sprites[3];
 sf::Texture textures[3];
@@ -72,6 +73,7 @@ void receivePosition(SOCKET client_socket) {
             if (client_num >= 0 && client_num < 3) {
                 activeClients[client_num] = true;
                 explorerViews[client_num].setCenter(x_float, y_float);
+                sprites[client_num].setPosition(x_float, y_float);
                 activeClientsTime[client_num] = clock();
                 clientSocketIDs[client_num] = client_socket;
             }
@@ -95,8 +97,32 @@ void receivePosition(SOCKET client_socket) {
     }
 }
 
+void sendSpritePositionsThread(SOCKET client_socket) {
+    while (true) {
+		std::stringstream ss;
+        for (int i = 0; i < 3; i++) {
+            if (activeClients[i]) {
+				sf::Vector2f clientPos = sprites[i].getPosition();
+				ss << "(" << (i + 1) * -1 << "," << clientPos.x << "," << clientPos.y << ")\n";
+			}
+		}
+		std::string serializedClients = ss.str();
+        std::cout << serializedClients << std::endl;
+		int totalSent = 0;
+        while (totalSent < serializedClients.length()) {
+			int sent = send(client_socket, serializedClients.c_str() + totalSent, serializedClients.length() - totalSent, 0);
+            if (sent == SOCKET_ERROR) {
+				// Handle error, e.g., break the loop or close socket
+				break;
+			}
+			totalSent += sent;
+		}
+	}
+}
+
 void sendPositionThread(SOCKET client_socket, std::vector<Particle>& particles) {
     while (true) {
+
         std::unique_lock<std::mutex> lock(mtx);
         cv.wait(lock, [] { return readyToRender; });
 
@@ -136,6 +162,7 @@ void acceptClients(SOCKET server_socket, std::vector<Particle>& particles) {
         // Start a new thread to handle communication with the client
         std::thread(receivePosition, client_socket).detach();
         std::thread(sendPositionThread, client_socket, std::ref(particles)).detach();
+        std::thread(sendSpritePositionsThread, client_socket).detach();
     }
 
 }
@@ -175,42 +202,189 @@ void moveExplorer(float moveX, float moveY) {
     explorerView.setCenter(newCenter);
 }
 
-int main(){
-
+SOCKET initializeSocket() {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         std::cerr << "Error initializing Winsock" << std::endl;
         return 1;
     }
 
-    SOCKET server_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (server_socket == INVALID_SOCKET) {
+    SOCKET client_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (client_socket == INVALID_SOCKET) {
         std::cerr << "Error creating socket" << std::endl;
         WSACleanup();
         return 1;
     }
 
+    return client_socket;
+}
+
+bool bindAndListenSocket(SOCKET server_socket) {
     sockaddr_in server_address;
-    server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(5001); // Port number on which the server will listen
-    inet_pton(AF_INET, SERVER_IP, &server_address.sin_addr);
+	server_address.sin_family = AF_INET;
+	server_address.sin_port = htons(5001); // Port number on which the server will listen
+	inet_pton(AF_INET, SERVER_IP, &server_address.sin_addr);
 
-    // Bind the socket to the specified IP address and port
+	// Bind the socket to the specified IP address and port
     if (bind(server_socket, reinterpret_cast<SOCKADDR*>(&server_address), sizeof(server_address)) == SOCKET_ERROR) {
-        std::cerr << "Error binding socket" << std::endl;
-        closesocket(server_socket);
-        WSACleanup();
-        return 1;
-    }
+		std::cerr << "Error binding socket" << std::endl;
+		closesocket(server_socket);
+		WSACleanup();
+		return false;
+	}
 
-    // Listen for incoming connections
+	// Listen for incoming connections
     if (listen(server_socket, SOMAXCONN) == SOCKET_ERROR) {
-        std::cerr << "Error listening on socket" << std::endl;
-        closesocket(server_socket);
-        WSACleanup();
-        return 1;
+		std::cerr << "Error listening on socket" << std::endl;
+		closesocket(server_socket);
+		WSACleanup();
+		return false;
+	}
+
+	return true;
+}
+
+void setupGuiPanel(std::vector<Particle>& particles, std::vector<sf::CircleShape>& particleShapes) {
+    int particleCount = 0;
+    
+    // Setup ImGui window
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::Begin("Input Particle", NULL, ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::SeparatorText("Add Particles");
+
+    //imgui input numbers only
+    static int numberParticles = 0;
+    ImGui::InputInt("Num Particles", &numberParticles);
+    ImGui::Text("");
+    ImGui::Text("");
+
+    static int startX = 0;
+    static int startY = 0;
+    static int endX = 0;
+    static int endY = 0;
+    static float speed = 0;
+    static float angle = 0;
+
+    ImGui::InputInt("Start X1", &startX);
+    ImGui::InputInt("Start Y1", &startY);
+    ImGui::InputInt("End X1", &endX);
+    ImGui::InputInt("End Y1", &endY);
+    ImGui::SliderFloat("Speed 1", &speed, 0, 11);
+    ImGui::InputFloat("Angle 1", &angle);
+
+    //imgui button input
+    if (ImGui::Button("Add Case 1"))
+    {
+        std::cout << "CASE1: Adding " << numberParticles << " particles at " << startX << ", " << startY << " with speed " << speed << " and angle " << angle << std::endl;
+        float distance = sqrt(pow(endX - startX, 2) + pow(endY - startY, 2));
+        float interval = 0;
+        if (numberParticles == 1) interval = 0;
+        else interval = distance / (numberParticles - 1);
+
+        for (int i = 0; i < numberParticles; i++) {
+            particles.push_back(Particle(particleCount, startX + interval * i, startY + interval * i, angle, speed));
+            particleShapes.push_back(sf::CircleShape(1, 10));
+            particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
+            particleCount++;
+        }
+
+        cv.notify_all();
+
     }
 
+    ImGui::Text("");
+    ImGui::Text("");
+
+    static int startX2 = 0;
+    static int startY2 = 0;
+    static float speed2 = 0;
+    static float angleStart = 0;
+    static float angleEnd = 0;
+
+    ImGui::InputInt("Start X2", &startX2);
+    ImGui::InputInt("Start Y2", &startY2);
+    ImGui::SliderFloat("Speed 2", &speed2, 0, 11);
+    ImGui::InputFloat("Angle Start", &angleStart);
+    ImGui::InputFloat("Angle End", &angleEnd);
+
+    //imgui button input
+    if (ImGui::Button("Add Case 2"))
+    {
+        std::cout << "CASE2: Adding " << numberParticles << " particles at " << startX2 << ", " << startY2 << " with speed " << speed2 << " and angle " << angleStart << " to " << angleEnd << std::endl;
+        float interval = 0;
+        if (numberParticles > 1) interval = (angleEnd - angleStart) / (numberParticles);
+
+        std::cout << interval;
+
+        for (int i = 0; i < numberParticles; i++) {
+            particles.push_back(Particle(particleCount, startX2, startY2, angleStart + (interval * i), speed2));
+            particleShapes.push_back(sf::CircleShape(1, 10));
+            particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
+            particleCount++;
+        }
+
+        cv.notify_all();
+
+    }
+
+    ImGui::Text("");
+    ImGui::Text("");
+
+    static int startX3 = 0;
+    static int startY3 = 0;
+    static float angle3 = 0;
+    static float speedStart = 0;
+    static float speedEnd = 0;
+
+    ImGui::InputInt("Start X3", &startX3);
+    ImGui::InputInt("Start Y3", &startY3);
+    ImGui::InputFloat("Angle 3", &angle3);
+    ImGui::SliderFloat("Speed Start", &speedStart, 0, 12);
+    ImGui::SliderFloat("Speed End", &speedEnd, 0, 12);
+
+
+
+    //imgui button input
+    if (ImGui::Button("Add Case 3"))
+    {
+        std::cout << "CASE3: Adding " << numberParticles << " particles at " << startX3 << ", " << startY3 << " with angle " << angle3 << " and speed " << speedStart << " to " << speedEnd << std::endl;
+
+        float interval = 0;
+        if (numberParticles > 1) {
+            interval = (speedEnd - speedStart) / (numberParticles - 1);
+        }
+
+
+        std::cout << interval;
+
+        for (int i = 0; i < numberParticles; i++) {
+            particles.push_back(Particle(particleCount, startX3, startY3, angle3, speedStart + (interval * i)));
+            particleShapes.push_back(sf::CircleShape(1, 10));
+            particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
+            particleCount++;
+        }
+
+        cv.notify_all();
+    }
+
+    if (ImGui::Button("Clear Balls"))
+    {
+        particleCount = 0;
+        particles.clear();
+        particleShapes.clear();
+    }
+
+    ImGui::End();
+}
+
+
+int main(){
+
+    SOCKET server_socket = initializeSocket();
+
+    if (!bindAndListenSocket(server_socket)) {
+		return 1;
+	}
     std::cout << "Server is listening..." << std::endl;
 
     std::vector<Particle> particles;
@@ -218,31 +392,29 @@ int main(){
     int particleCount = 0;
     
     std::thread acceptClientsThread(acceptClients, server_socket, std::ref(particles));
-    //std::thread clearClientsThread(clearClients);
 
     // Create the main window
     sf::RenderWindow mainWindow(sf::VideoMode(1280, 720), "Particle Simulator");
     mainWindow.setFramerateLimit(60);
     ImGui::SFML::Init(mainWindow);
 
+
+    // Setup FPS Counter
+    FPS fps;
     auto lastFPSDrawTime = std::chrono::steady_clock::now();
     const std::chrono::milliseconds timeInterval(500); // 0.5 seconds
-    FPS fps;
-
     sf::Font font;
     if (!font.loadFromFile("OpenSans-VariableFont_wdth,wght.ttf"))
     {
         std::cout << "error";
     }
-
     sf::Text fpsText;
     fpsText.setFont(font);
     fpsText.setFillColor(sf::Color::Green);
     fpsText.setStyle(sf::Text::Bold | sf::Text::Underlined);
 
-
+    // Setup particle threads
 	std::vector<std::thread> threads;
-
 	for (int i = 0; i < numThreads; ++i) {
 		threads.emplace_back(updateParticles, std::ref(particles), std::ref(particleShapes));
 	}
@@ -267,164 +439,34 @@ int main(){
     // Main loop
     while (mainWindow.isOpen())
     {
-        auto currentFPSTime = std::chrono::steady_clock::now();
-        auto elapsedFPSTime = std::chrono::duration_cast<std::chrono::milliseconds>(currentFPSTime - lastFPSDrawTime);
-
         // Process events
         sf::Event event;
         while (mainWindow.pollEvent(event))
         {
             ImGui::SFML::ProcessEvent(event);
-            
+
             if (event.type == sf::Event::Closed)
                 mainWindow.close();
         }
-
         ImGui::SFML::Update(mainWindow, deltaClock.restart());
+
+        auto currentFPSTime = std::chrono::steady_clock::now();
+        auto elapsedFPSTime = std::chrono::duration_cast<std::chrono::milliseconds>(currentFPSTime - lastFPSDrawTime);
 
         mainWindow.setView(mainWindow.getDefaultView());
 
-        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        setupGuiPanel(std::ref(particles), std::ref(particleShapes));
 
-        ImGui::Begin("Input Particle", NULL, ImGuiWindowFlags_AlwaysAutoResize);
-        ImGui::SeparatorText("Add Particles");
+        // Clear the main window
+        mainWindow.clear(sf::Color{ 0, 0, 0, 255 });
 
-        //imgui input numbers only
-        static int numberParticles = 0;
-        ImGui::InputInt("Num Particles", &numberParticles);
-        ImGui::Text("");
-        ImGui::Text("");
-
-        static int startX = 0;
-        static int startY = 0;
-        static int endX = 0;
-        static int endY = 0;
-        static float speed = 0;
-        static float angle = 0;
-
-        ImGui::InputInt("Start X1", &startX);
-        ImGui::InputInt("Start Y1", &startY);
-        ImGui::InputInt("End X1", &endX);
-        ImGui::InputInt("End Y1", &endY);
-        ImGui::SliderFloat("Speed 1", &speed, 0, 11);
-        ImGui::InputFloat("Angle 1", &angle);
-
-        //imgui button input
-        if (ImGui::Button("Add Case 1"))
-        {
-            std::cout << "CASE1: Adding " << numberParticles << " particles at " << startX << ", " << startY << " with speed " << speed << " and angle " << angle << std::endl;
-            float distance = sqrt(pow(endX - startX, 2) + pow(endY - startY, 2));
-            float interval = 0;
-            if (numberParticles == 1) interval = 0;
-            else interval = distance / (numberParticles - 1);
-
-            for (int i = 0; i < numberParticles; i++) {
-                particles.push_back(Particle(particleCount, startX + interval * i, startY + interval * i, angle, speed));
-                particleShapes.push_back(sf::CircleShape(1, 10));
-                particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
-                particleCount++;
-            }
-
-            cv.notify_all();
-
-        }
-
-        ImGui::Text("");
-        ImGui::Text("");
-
-        static int startX2 = 0;
-        static int startY2 = 0;
-        static float speed2 = 0;
-        static float angleStart = 0;
-        static float angleEnd = 0;
-
-        ImGui::InputInt("Start X2", &startX2);
-        ImGui::InputInt("Start Y2", &startY2);
-        ImGui::SliderFloat("Speed 2", &speed2, 0, 11);
-        ImGui::InputFloat("Angle Start", &angleStart);
-        ImGui::InputFloat("Angle End", &angleEnd);
-
-        //imgui button input
-        if (ImGui::Button("Add Case 2"))
-        {
-            std::cout << "CASE2: Adding " << numberParticles << " particles at " << startX2 << ", " << startY2 << " with speed " << speed2 << " and angle " << angleStart << " to " << angleEnd << std::endl;
-            float interval = 0;
-            if (numberParticles > 1) interval = (angleEnd - angleStart) / (numberParticles);
-
-            std::cout << interval;
-
-            for (int i = 0; i < numberParticles; i++) {
-                particles.push_back(Particle(particleCount, startX2, startY2, angleStart + (interval * i), speed2));
-                particleShapes.push_back(sf::CircleShape(1, 10));
-                particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
-                particleCount++;
-            }
-
-            cv.notify_all();
-
-        }
-
-        ImGui::Text("");
-        ImGui::Text("");
-
-        static int startX3 = 0;
-        static int startY3 = 0;
-        static float angle3 = 0;
-        static float speedStart = 0;
-        static float speedEnd = 0;
-
-        ImGui::InputInt("Start X3", &startX3);
-        ImGui::InputInt("Start Y3", &startY3);
-        ImGui::InputFloat("Angle 3", &angle3);
-        ImGui::SliderFloat("Speed Start", &speedStart, 0, 12);
-        ImGui::SliderFloat("Speed End", &speedEnd, 0, 12);
-
-
-
-        //imgui button input
-        if (ImGui::Button("Add Case 3"))
-        {
-            std::cout << "CASE3: Adding " << numberParticles << " particles at " << startX3 << ", " << startY3 << " with angle " << angle3 << " and speed " << speedStart << " to " << speedEnd << std::endl;
-
-            float interval = 0;
-            if (numberParticles > 1) {
-                interval = (speedEnd - speedStart) / (numberParticles - 1);
-            }
-
-
-            std::cout << interval;
-
-            for (int i = 0; i < numberParticles; i++) {
-                particles.push_back(Particle(particleCount, startX3, startY3, angle3, speedStart + (interval * i)));
-                particleShapes.push_back(sf::CircleShape(1, 10));
-                particleShapes.at(i).setPosition(particles.at(i).getPosX(), particles.at(i).getPosY());
-                particleCount++;
-            }
-
-            cv.notify_all();
-        }
-
-        if (ImGui::Button("Clear Balls"))
-        {
-            particleCount = 0;
-            particles.clear();
-            particleShapes.clear();
-        }
-
-        ImGui::End();
-
+        sf::RectangleShape rectShapes[3];
         for (int i = 0; i < 3; ++i) {
             if (activeClients[i]) {
                 sprites[i].setTexture(textures[i]);
                 sprites[i].setTextureRect(sf::IntRect(0, 0, 3, 3));
                 sprites[i].setOrigin(sprites[i].getLocalBounds().width / 2, sprites[i].getLocalBounds().height / 2);
                 sprites[i].setPosition(explorerViews[i].getCenter());
-			}
-        }
-
-        sf::RectangleShape rectShapes[3];
-        for (int i = 0; i < 3; ++i) {
-            if (activeClients[i]) {
                 rectShapes[i].setSize(sf::Vector2f(33, 19));
                 rectShapes[i].setFillColor(sf::Color::Transparent);
                 rectShapes[i].setOutlineColor(sf::Color::White);
@@ -432,9 +474,7 @@ int main(){
             }
         }
 
-        // Clear the main window
-        mainWindow.clear(sf::Color{ 0, 0, 0, 255 });
-
+        // Draw border for map
         sf::RectangleShape explorerArea(sf::Vector2f(1280, 720));
         explorerArea.setFillColor(sf::Color{ 128, 128, 128, 255 });
         mainWindow.draw(explorerArea);
@@ -450,6 +490,15 @@ int main(){
             currentParticle = 0;
             cv.notify_all();
             lock.unlock();
+        }
+
+        for (int i = 0; i < 3; ++i) {
+            if (activeClients[i]) {
+                sf::Vector2f spritePos = sprites[i].getPosition();
+                rectShapes[i].setPosition(spritePos.x - 16.5f, spritePos.y - 9.5f);
+                mainWindow.draw(sprites[i]);
+                mainWindow.draw(rectShapes[i]);
+            }
         }
 
         fps.update();
@@ -468,15 +517,6 @@ int main(){
         mainWindow.draw(fpsText);
 
         ImGui::SFML::Render(mainWindow);
-        
-        for (int i = 0; i < 3; ++i) {
-            if (activeClients[i]) {
-                sf::Vector2f spritePos = sprites[i].getPosition();
-                rectShapes[i].setPosition(spritePos.x - 16.5f, spritePos.y - 9.5f);
-                mainWindow.draw(sprites[i]);
-                mainWindow.draw(rectShapes[i]);
-            }
-        }
 
         // Display the contents of the main window
         mainWindow.display();
