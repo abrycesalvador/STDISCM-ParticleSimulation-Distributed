@@ -200,7 +200,7 @@ int main()
     std::cout << "Connected to server" << std::endl;
 
     // Create the main window
-    sf::RenderWindow mainWindow(sf::VideoMode(1280, 720), "Particle Simulator Client 2");
+    sf::RenderWindow mainWindow(sf::VideoMode(1280, 720), "Particle Simulator Client 3");
     mainWindow.setFramerateLimit(60);
     ImGui::SFML::Init(mainWindow);
     sf::Clock deltaClock;
@@ -303,7 +303,7 @@ int main()
         mainWindow.draw(sprite);
 
         for (int i = 0; i < 3; ++i) {
-            if (activeClients[i] && i != 1) {
+            if (activeClients[i] && i != 2) {
                 mainWindow.draw(sprites[i]);
             }
         }
