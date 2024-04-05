@@ -21,7 +21,7 @@
 
 #define SERVER_IP "127.0.0.1"
 #define MAX_BUFFER_SIZE 4096
-#define CLIENT_ID 2
+#define CLIENT_ID 1
 
 std::mutex mtx;
 std::condition_variable cv;
